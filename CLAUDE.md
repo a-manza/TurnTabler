@@ -160,8 +160,21 @@ README.md               # User-facing documentation
 ## Current Status
 
 **Phase:** 1 - Proof of Concept
-**Next Task:** Create research documentation and evaluate tech stack options
+**Current Task:** SoCo POC plan complete, ready for validation testing
+**Next Action:** Run POC test (2-3 hours) to validate continuous streaming
 **Blockers:** None
+
+**Sonos Beam Info:**
+- IP: 192.168.86.63
+- Hostname: Sonos-542A1BDF8748.local
+- AirPlay 2 capable
+- Firmware: p20.91.0-70070
+
+**POC Status:**
+- Plan: `/docs/implementation/soco-poc-plan.md` ✅
+- Purpose: Validate continuous FLAC streaming via SoCo
+- Time estimate: 2-3 hours
+- Decision: SoCo (lossless) vs OwnTone (proven but lossy)
 
 ## Key Decisions Log
 
@@ -175,10 +188,48 @@ README.md               # User-facing documentation
 - **Rationale:** Modern, fast, aligns with Python 3.13 best practices
 - **Impact:** Simpler dependency management
 
-### Tech Stack Selection
-- **Status:** Pending evaluation (Task 1)
-- **Leading candidate:** VLC (proven in research, simple integration)
-- **Evaluation criteria:** Quality, latency, Python control ease, Pi portability
+### 2025-11-14: CRITICAL - AirPlay Quality Discovery
+- **Discovery:** AirPlay to Sonos delivers AAC-LC (lossy), NOT lossless ALAC
+- **Source:** Comprehensive research of Sonos Community forums, user reports
+- **Impact:** Any AirPlay approach (VLC, GStreamer, PipeWire, OwnTone) delivers lossy audio
+- **Implication:** Must use Sonos native protocol for true lossless
+
+### 2025-11-14: Tech Stack - Two Viable Approaches
+
+**PRIMARY: SoCo (Sonos Native Protocol)**
+- **Approach:** Python + SoCo library + HTTP FLAC streaming
+- **Quality:** FLAC lossless to Sonos
+- **Status:** Recommended for testing first
+- **Confidence:** 8/10 (needs validation)
+- **Docs:** `/docs/implementation/soco-approach.md`
+
+**SECONDARY: OwnTone (AirPlay 2)**
+- **Approach:** Full music server with pipe input
+- **Quality:** AAC-LC lossy to Sonos (limitation!)
+- **Status:** Fallback if SoCo problematic
+- **Confidence:** 9/10 (proven, but lossy)
+- **Docs:** `/docs/implementation/owntone-deep-dive.md`
+
+### 2025-11-14: Tech Stack Evaluation Complete
+- **Status:** Complete - 18+ options researched, 2 viable approaches identified
+- **Research docs:**
+  - `/docs/research/sonos-native-vs-airplay.md`
+  - `/docs/implementation/tech-stack-decision.md`
+  - `/docs/implementation/soco-approach.md`
+  - `/docs/implementation/owntone-deep-dive.md`
+  - `/docs/implementation/DECISION-SUMMARY.md`
+- **Next:** Validate SoCo approach with POC testing
+- **Decision point:** POC test results (2-3 hours)
+
+### 2025-11-14: Continuous Streaming Validation
+- **Concern:** Will continuous streaming (turntable-like) work with SoCo?
+- **Research findings:**
+  - Sonos supports chunked transfer encoding for FLAC/WAV ✅
+  - SoCo `force_radio=True` designed for continuous streams ✅
+  - Internet radio (continuous) proven working with SoCo ✅
+  - Alternative: `x-rincon-mp3radio://` URI prefix for compatibility
+- **POC Plan:** `/docs/implementation/soco-poc-plan.md` created
+- **Confidence:** 8/10 that continuous streaming will work
 
 ## Resources
 
@@ -197,8 +248,11 @@ README.md               # User-facing documentation
 ### Critical Pitfall Avoided
 Initially considered shairport-sync, but this is a **receiver** not a **sender**. The Raspberry Pi guide document clarified this fundamental architecture requirement.
 
-### Quality Insights
-- AirPlay 2 max quality: 24-bit/48kHz (sufficient for vinyl)
-- ALAC codec is truly lossless (bit-perfect preservation)
-- Expected latency: 200-300ms (not noticeable for music playback)
+### Quality Insights (UPDATED 2025-11-14)
+- **CRITICAL:** AirPlay to Sonos delivers AAC-LC (LOSSY), not lossless ALAC
+- **Solution:** Sonos Native Protocol (UPnP/HTTP) delivers FLAC (LOSSLESS)
+- AirPlay 2 protocol supports 24-bit/48kHz, but Sonos implementation is lossy
+- Sonos native can handle 24-bit/48kHz FLAC (may be truncated to 16-bit internally)
+- Expected latency: 200-300ms (AirPlay), unknown for Sonos native (needs POC testing)
 - Network quality matters - Ethernet > WiFi for consistency
+- Continuous streaming: FLAC/WAV work well with chunked encoding on Sonos ✅

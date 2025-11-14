@@ -1,7 +1,7 @@
 # Tech Stack Decision for TurnTabler Phase 1
 
-**Date:** 2025-11-12
-**Status:** In Progress - Testing
+**Date:** 2025-11-14 (Updated)
+**Status:** Complete - Recommendation Ready
 
 ## Environment
 
@@ -233,23 +233,123 @@ Create test files with different qualities:
 
 ---
 
+## CRITICAL DISCOVERY: AirPlay Quality Issue
+
+**Date:** 2025-11-14
+
+### Research Finding
+
+AirPlay to Sonos delivers **AAC-LC (lossy codec)**, NOT lossless ALAC, even though:
+- AirPlay 2 protocol supports lossless
+- Devices support 24-bit/48kHz
+- OwnTone can send ALAC
+
+**Source:** Multiple Sonos Community posts confirm this
+
+**Impact:** Any AirPlay-based solution (VLC, GStreamer, PipeWire RAOP, OwnTone) will deliver **lossy audio** to Sonos, defeating our lossless goal.
+
+### Solution: Sonos Native Protocol
+
+Sonos's native UPnP protocol delivers **FLAC lossless** when streaming via HTTP.
+
+**See detailed docs:**
+- `/docs/research/sonos-native-vs-airplay.md`
+- `/docs/implementation/owntone-deep-dive.md`
+- `/docs/implementation/soco-approach.md`
+
+---
+
+## Final Recommendations
+
+### PRIMARY: SoCo (Sonos Native Protocol)
+
+**Approach:** Stream FLAC via HTTP, use SoCo (Python library) to control Sonos via UPnP
+
+**Why:**
+- ✅ **True lossless** - FLAC to Sonos, not AAC-LC
+- ✅ **Native Python** - SoCo library mature, excellent docs
+- ✅ **Simpler** - No full server needed
+- ✅ **24-bit potential** - Can stream 24-bit FLAC
+- ✅ **Pi-portable** - Same code on Ubuntu & Pi
+
+**Implementation:**
+1. HTTP server (Flask/FastAPI) streaming FLAC
+2. SoCo library to control Sonos playback
+3. Real-time audio capture → FLAC encoding → HTTP stream
+
+**Status:** Needs validation testing
+
+**See:** `/docs/implementation/soco-approach.md`
+
+**Confidence:** 8/10 (pending real-time streaming validation)
+
+---
+
+### SECONDARY: OwnTone (AirPlay 2)
+
+**Approach:** Purpose-built server for turntable → AirPlay streaming
+
+**Why:**
+- ✅ Purpose-built for exactly our use case
+- ✅ Mature, proven on Raspberry Pi + turntables
+- ✅ Auto-detection of pipe input
+- ✅ Multi-room AirPlay 2
+
+**Critical Limitation:**
+- ❌ **Delivers AAC-LC lossy** to Sonos (not lossless)
+- ❌ 16-bit maximum (pipe input limitation)
+- ❌ Heavyweight (full server)
+- ❌ Complex installation
+
+**When to use:** If SoCo approach proves too problematic (latency, stability issues)
+
+**See:** `/docs/implementation/owntone-deep-dive.md`
+
+**Confidence:** 9/10 (proven, but accept lossy quality)
+
+---
+
+## Decision Matrix
+
+| Criterion | SoCo (Native) | OwnTone (AirPlay) | Weight |
+|-----------|---------------|-------------------|--------|
+| **Audio Quality** | 🟢 FLAC lossless | 🔴 AAC-LC lossy | CRITICAL |
+| **Bit Depth** | 24-bit possible | 16-bit max | HIGH |
+| **Python Integration** | 🟢 Native (SoCo) | 🟡 JSON API | HIGH |
+| **Setup Complexity** | Medium | High | MEDIUM |
+| **Purpose-Built** | No | 🟢 Yes | MEDIUM |
+| **Pi Portability** | ✅ Yes | ✅ Yes | HIGH |
+| **Maturity** | Very mature | Very mature | HIGH |
+| **Installation** | `pip install` | Build/PPA | MEDIUM |
+| **Proven for Turntables** | Unknown | 🟢 Yes | HIGH |
+
+**Winner:** SoCo for quality, OwnTone for proven solution
+
+---
+
 ## Recommendation
 
-**Status:** Pending testing
+**Phase 1A: Validate SoCo Approach (4-6 hours)**
 
-**Initial Preference:** VLC
-- Simplest path to working POC
-- Documented to work in research
-- Easy subprocess control
+Test if Sonos native protocol works for real-time streaming:
 
-**Fallback:** GStreamer
-- If VLC has issues with RAOP
-- Better for future USB input (Phase 4)
+1. Install SoCo library
+2. Build simple HTTP streaming server (Flask)
+3. Test real-time FLAC encoding
+4. Measure latency and quality
+5. Validate stability
 
-**Decision will be based on:**
-1. Which actually works reliably
-2. Audio quality achieved
-3. Ease of Python integration
+**If successful:** Proceed with SoCo implementation
+- Better quality (lossless FLAC)
+- Simpler architecture
+- Native Python
+
+**If problematic:** Fall back to OwnTone
+- Accept AAC-LC quality limitation
+- Benefit from turnkey solution
+- Proven with turntables
+
+**Time to decision:** 1 day of testing
 
 ---
 
