@@ -62,14 +62,15 @@ def main():
 
     try:
         # IMPORTANT: Use playback_device (coordinator if grouped) for all commands
-        # NOTE: Using force_radio=True for continuous streaming
-        # - force_radio=True requires ICY metadata headers (SHOUTcast protocol)
-        # - streaming_icy.py provides proper ICY metadata support
-        # - This enables infinite streaming (for turntable use case)
+        # NOTE: Testing WITHOUT force_radio for plain HTTP chunked streaming
+        # - force_radio=True requires ICY metadata (SHOUTcast protocol)
+        # - This test uses simple HTTP chunked encoding (no metadata)
+        # - Tests if Sonos accepts infinite FLAC chunks via plain HTTP
+        # - Mimics real turntable: continuous chunks, no special protocol
         playback_device.play_uri(
             stream_url,
             title="TurnTabler POC Test",
-            force_radio=True,  # Re-enabled with ICY metadata support
+            # force_radio=False,  # Test plain HTTP chunked stream
         )
 
         print("✅ Stream started successfully!")

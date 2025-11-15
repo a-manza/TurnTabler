@@ -46,34 +46,94 @@ This POC validates that we can stream continuous, indefinite-length FLAC audio t
 
 ---
 
-### Testing Continuous Streaming (Phase 2 - Turntable Ready)
+### Complete End-to-End Streaming Test (Phase 2 - Production Ready)
 
-**For infinite/continuous streaming (like turntable):**
+**Full validation of the production streaming pipeline.**
 
-**Terminal 1 - Start ICY streaming server:**
+This test uses the EXACT code that will run with your turntable:
+- **Audio Source:** Synthetic (turntable replaced with USB interface in production)
+- **HTTP Server:** WAV streaming with infinite headers via chunked encoding
+- **Sonos Control:** SoCo integration for complete control
+- **Monitoring:** Extended continuous playback validation
+
+**Run the complete test (one command):**
+
 ```bash
 source .venv/bin/activate
-python -m turntabler.streaming_icy
+python -m turntabler.streaming_test --duration 600
 ```
 
-**Terminal 2 - Test continuous playback:**
+**Command options:**
 ```bash
-source .venv/bin/activate
-python -m turntabler.control
+# Test with custom duration (seconds)
+python -m turntabler.streaming_test --duration 1800  # 30 minutes
+
+# Test specific Sonos device
+python -m turntabler.streaming_test --sonos-ip 192.168.86.63
+
+# Test with file-based audio
+python -m turntabler.streaming_test --source file:test-loop.wav
+
+# Test with different frequency
+python -m turntabler.streaming_test --frequency 880.0
+
+# View all options
+python -m turntabler.streaming_test --help
 ```
+
+**What the test does:**
+1. Initializes continuous audio source (synthetic 440Hz sine wave)
+2. Starts HTTP WAV streaming server (localhost:5901)
+3. Discovers Sonos device on network
+4. Streams WAV via HTTP chunked encoding (no Content-Length)
+5. Monitors playback state transitions (first 10 seconds)
+6. Logs status every 60 seconds for full test duration
+7. Validates no audio dropouts or interruptions
+8. Graceful shutdown on test completion or Ctrl+C
 
 **Expected behavior:**
-- Starts playing immediately
-- Loops continuously (after 30 seconds, repeats)
-- Can pause/play/stop via Sonos app
-- No gaps or dropouts
-- Run for 10+ minutes to validate stability
+- ✅ Server starts immediately
+- ✅ Sonos device auto-discovered
+- ✅ Audio begins playing within 2-3 seconds
+- ✅ Continuous playback for entire duration (no gaps)
+- ✅ Full Sonos app control (pause/play/stop/volume)
+- ✅ Graceful cleanup on completion
+
+**Why this validates production readiness:**
+The code path is identical to production - only the audio source changes:
+
+```
+PRODUCTION (Turntable):
+USB Interface → ALSA Capture → Audio Source → HTTP WAV Server → Sonos
+
+POC TEST (Synthetic):
+Synthetic Generator → Audio Source → HTTP WAV Server → Sonos
+
+FUTURE TEST (File-based):
+WAV File → Audio Source → HTTP WAV Server → Sonos
+```
+
+**To run with production USB audio later:**
+```python
+# Change this line in your code:
+from .audio_source import FileAudioSource, USBAudioSource
+
+# From:
+source = SyntheticAudioSource(...)
+
+# To:
+source = USBAudioSource(device="hw:X,Y")  # Where X,Y is USB device
+
+# Everything else is identical!
+```
 
 **Success criteria:**
-- ✅ Stream plays indefinitely
-- ✅ No audio dropouts
-- ✅ Clean pause/play/stop controls
-- ✅ Looping is seamless
+- ✅ Continuous playback for entire test duration (10+ minutes recommended)
+- ✅ Sonos reports "PLAYING" state throughout
+- ✅ No "network speed insufficient" errors
+- ✅ No audio artifacts or stuttering
+- ✅ Volume/pause/play/stop controls work via Sonos app
+- ✅ Clean shutdown without errors
 
 ---
 
@@ -182,18 +242,28 @@ Each test should take 1-2 minutes. Combined diagnosis time: ~10 minutes.
 
 ```
 src/turntabler/
-  streaming.py        # FastAPI server - simple looping (not ICY)
-  streaming_simple.py # FastAPI server - single file serve (no looping)
-  streaming_debug.py  # FastAPI server - with detailed logging
-  streaming_icy.py    # FastAPI server - ICY metadata for continuous streaming ⭐
-  control.py          # SoCo control script for Sonos (with group handling)
-  test_known_uri.py   # Test script - public radio stream
-  test_wav.py         # Test script - WAV format
-test-loop.flac        # Test audio file (30s, 440Hz tone, Sonos-optimized)
-test-loop.wav         # Test audio file (30s, 440Hz tone, uncompressed)
+  streaming.py            # FastAPI server - simple looping (not ICY)
+  streaming_simple.py     # FastAPI server - single file serve (no looping)
+  streaming_debug.py      # FastAPI server - with detailed logging
+  streaming_icy.py        # FastAPI server - ICY metadata (discontinued)
+  streaming_realtime.py   # FastAPI server - chunk-based streaming ⭐ (RECOMMENDED)
+  control.py              # SoCo control script for Sonos (with group handling)
+  test_known_uri.py       # Test script - public radio stream
+  test_wav.py             # Test script - WAV format
+  chunks/                 # Directory with pre-generated FLAC chunks (3s each)
+    chunk_00.flac
+    chunk_01.flac
+    ... (chunk_09.flac)
+
+test-loop.flac          # Test audio file (30s, 440Hz tone, Sonos-optimized)
+test-loop.wav           # Test audio file (30s, 440Hz tone, uncompressed)
+generate_flac_chunks.py # Script to generate test chunks
+regenerate_test_audio.sh # Script to regenerate single test files
 ```
 
-**For turntable use:** Use `streaming_icy.py` with `control.py`
+**For continuous turntable use:** Use `streaming_realtime.py` with `control.py`
+
+**Architecture:** Chunk-based HTTP streaming (no force_radio, no ICY metadata needed)
 
 ### Technical Details
 
