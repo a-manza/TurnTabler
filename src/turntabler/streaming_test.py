@@ -256,11 +256,54 @@ class StreamingTest:
             logger.error(f"Failed to start streaming: {e}")
             return False
 
-    async def run_streaming(self):
-        """Run streaming server."""
+    def _wait_for_server_ready(self, timeout: int = 5) -> bool:
+        """
+        Wait for HTTP server to be ready.
+
+        Polls the stream endpoint until it responds or timeout occurs.
+
+        Args:
+            timeout: Maximum seconds to wait
+
+        Returns:
+            True if server is ready, False if timeout
+        """
+        import socket
+        start = time.time()
+        local_ip = self.get_local_ip()
+        server_addr = (local_ip, self.port)
+
+        logger.info("Waiting for HTTP server to be ready...")
+
+        while time.time() - start < timeout:
+            try:
+                # Try to connect to the server port
+                s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                s.settimeout(1)
+                result = s.connect_ex(server_addr)
+                s.close()
+
+                if result == 0:
+                    logger.info("✅ HTTP server is ready")
+                    return True
+            except Exception:
+                pass
+
+            time.sleep(0.2)
+
+        logger.error(f"HTTP server failed to start within {timeout}s")
+        return False
+
+    def start_http_server_background(self) -> bool:
+        """
+        Start HTTP server in background thread.
+
+        Returns:
+            True if server thread started successfully
+        """
         if not self.server:
             logger.error("Server not initialized")
-            return
+            return False
 
         # Create FastAPI app
         app = self.server.app
@@ -283,6 +326,11 @@ class StreamingTest:
 
         logger.info(f"Streaming server started on {self.host}:{self.port}")
 
+        # Wait for server to be ready
+        return self._wait_for_server_ready(timeout=5)
+
+    async def monitor_streaming(self):
+        """Monitor streaming and update status."""
         # Keep running until test duration expires
         self.start_time = time.time()
 
@@ -318,7 +366,6 @@ class StreamingTest:
             logger.info("\nTest interrupted by user")
         finally:
             self.stop_requested = True
-            # Server is running as a daemon thread, will exit automatically
 
     def run_test(self, audio_source: str = "synthetic") -> bool:
         """
@@ -341,19 +388,26 @@ class StreamingTest:
         if not self.setup_streaming_server():
             return False
 
+        # CRITICAL: Start HTTP server FIRST, before telling Sonos to connect
+        # This prevents race condition where Sonos tries to fetch stream before server is ready
+        if not self.start_http_server_background():
+            logger.error("HTTP server failed to start")
+            return False
+
+        # Now setup Sonos (after server is ready)
         if not self.setup_sonos():
             logger.warning("Sonos setup failed - continuing with server only")
 
-        # Start
+        # Now tell Sonos to start streaming (server is already running)
         if not self.start_streaming():
             logger.warning("Sonos streaming failed - continuing with server")
 
-        # Run
+        # Run monitoring loop
         logger.info(f"\nRunning for {self.test_duration_seconds} seconds...")
         logger.info("Press Ctrl+C to stop\n")
 
         try:
-            asyncio.run(self.run_streaming())
+            asyncio.run(self.monitor_streaming())
         except KeyboardInterrupt:
             logger.info("\nTest stopped")
 
