@@ -31,6 +31,16 @@ class AudioFormat:
         """Bytes per second."""
         return self.sample_rate * self.bytes_per_sample
 
+    @property
+    def block_align(self) -> int:
+        """Bytes per sample frame (all channels)."""
+        return self.bytes_per_sample
+
+    @property
+    def bandwidth_mbps(self) -> float:
+        """Network bandwidth in Mbps."""
+        return (self.byte_rate * 8) / 1_000_000
+
 
 class AudioSource(ABC):
     """Base class for audio sources."""

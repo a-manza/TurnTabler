@@ -173,17 +173,36 @@ class StreamingTest:
             logger.warning("SoCo not installed - skipping Sonos setup")
             return True  # Continue testing anyway
 
+        # Connect to device
+        device = None
         if self.sonos_ip:
             try:
-                self.sonos = SoCo(self.sonos_ip)
-                logger.info(f"Connected to Sonos: {self.sonos.player_name}")
-                return True
+                device = SoCo(self.sonos_ip)
+                logger.info(f"Connected to Sonos: {device.player_name}")
             except Exception as e:
                 logger.error(f"Failed to connect to {self.sonos_ip}: {e}")
                 return False
         else:
-            self.sonos = self.discover_sonos()
-            return self.sonos is not None
+            device = self.discover_sonos()
+            if not device:
+                return False
+
+        # Handle grouping - CRITICAL for grouped devices
+        # Commands to grouped member devices are silently ignored
+        # Must route all commands to group.coordinator
+        logger.info("Checking group configuration...")
+        if device.group:
+            members = [m.player_name for m in device.group.members]
+            coordinator = device.group.coordinator
+            logger.info(f"  Device is grouped with: {', '.join(members)}")
+            logger.info(f"  Coordinator: {coordinator.player_name}")
+            self.sonos = coordinator
+        else:
+            logger.info("  Device is standalone (not grouped)")
+            self.sonos = device
+
+        logger.info(f"  Sending commands to: {self.sonos.player_name}")
+        return True
 
     def start_streaming(self) -> bool:
         """Start streaming to Sonos."""
@@ -299,7 +318,7 @@ class StreamingTest:
             logger.info("\nTest interrupted by user")
         finally:
             self.stop_requested = True
-            await server.shutdown()
+            # Server is running as a daemon thread, will exit automatically
 
     def run_test(self, audio_source: str = "synthetic") -> bool:
         """
