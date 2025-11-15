@@ -1,7 +1,11 @@
 [project]
 name = "turntabler"
 version = "0.1.0"
-description = "Add your description here"
+description = "Stream vinyl records to Sonos speakers with lossless audio quality"
 readme = "README.md"
 requires-python = ">=3.13"
-dependencies = []
+dependencies = [
+    "soco",
+    "fastapi",
+    "uvicorn[standard]",
+]
