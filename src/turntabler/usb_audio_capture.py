@@ -48,9 +48,14 @@ class SampleFormat(Enum):
     audio samples. Choose based on your USB audio interface capabilities
     and quality requirements.
     """
-    S16_LE = alsaaudio.PCM_FORMAT_S16_LE      # 16-bit signed little-endian (most compatible)
-    S24_3LE = alsaaudio.PCM_FORMAT_S24_3LE    # 24-bit signed little-endian (3 bytes per sample)
-    S32_LE = alsaaudio.PCM_FORMAT_S32_LE      # 32-bit signed little-endian
+
+    S16_LE = (
+        alsaaudio.PCM_FORMAT_S16_LE
+    )  # 16-bit signed little-endian (most compatible)
+    S24_3LE = (
+        alsaaudio.PCM_FORMAT_S24_3LE
+    )  # 24-bit signed little-endian (3 bytes per sample)
+    S32_LE = alsaaudio.PCM_FORMAT_S32_LE  # 32-bit signed little-endian
 
 
 @dataclass
@@ -80,7 +85,8 @@ class CaptureConfig:
         ... )
         >>> print(f"Latency: {config.latency_ms:.2f}ms")
     """
-    device: str = 'default'
+
+    device: str = "default"
     sample_rate: int = 48000
     channels: int = 2
     sample_format: SampleFormat = SampleFormat.S16_LE
@@ -171,6 +177,7 @@ class CaptureConfig:
 
 class CaptureError(Exception):
     """Exception raised for capture-related errors."""
+
     pass
 
 
@@ -231,7 +238,7 @@ class USBAudioCapture:
                 channels=self.config.channels,
                 format=self.config.sample_format.value,
                 periodsize=self.config.period_size,
-                device=self.config.device
+                device=self.config.device,
             )
 
             logger.info(f"Opened ALSA device: {self.config.device}")
@@ -266,7 +273,7 @@ class USBAudioCapture:
     def capture_stream(
         self,
         callback: Optional[Callable[[bytes], None]] = None,
-        duration_seconds: Optional[float] = None
+        duration_seconds: Optional[float] = None,
     ) -> Generator[bytes, None, None]:
         """
         Capture audio stream as generator.
@@ -404,14 +411,13 @@ class USBAudioCapture:
 
 
 # Example usage and testing
-if __name__ == '__main__':
+if __name__ == "__main__":
     import sys
     from turntabler.usb_audio import detect_usb_audio_device
 
     # Configure logging for standalone execution
     logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s - %(levelname)s - %(message)s'
+        level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
     )
 
     print("=" * 60)
@@ -444,7 +450,7 @@ if __name__ == '__main__':
         channels=2,
         sample_format=SampleFormat.S16_LE,
         period_size=1024,
-        periods=3
+        periods=3,
     )
 
     print("Capture configuration:")
@@ -465,7 +471,7 @@ if __name__ == '__main__':
 
     # Capture for 10 seconds and save to file
     duration = 10
-    output_file = '/tmp/turntabler_test_capture.raw'
+    output_file = "/tmp/turntabler_test_capture.raw"
 
     print(f"Capturing audio for {duration} seconds...")
     print(f"Output file: {output_file}")
@@ -474,22 +480,22 @@ if __name__ == '__main__':
     print()
 
     # Track total bytes using mutable container for closure
-    stats = {'total_bytes': 0}
+    stats = {"total_bytes": 0}
 
     try:
-        with open(output_file, 'wb') as f:
+        with open(output_file, "wb") as f:
+
             def write_callback(data: bytes):
                 f.write(data)
-                stats['total_bytes'] += len(data)
+                stats["total_bytes"] += len(data)
 
             for chunk in capture.capture_stream(
-                callback=write_callback,
-                duration_seconds=duration
+                callback=write_callback, duration_seconds=duration
             ):
                 # Progress indicator
                 if capture.frames_captured % (config.sample_rate // 4) == 0:
                     elapsed = capture.frames_captured / config.sample_rate
-                    print(f"  {elapsed:.1f}s captured...", end='\r')
+                    print(f"  {elapsed:.1f}s captured...", end="\r")
 
     except KeyboardInterrupt:
         print("\nStopped by user")
@@ -512,8 +518,12 @@ if __name__ == '__main__':
     print(f"Audio saved to: {output_file}")
     print()
     print("To play with aplay:")
-    print(f"  aplay -f S16_LE -r {config.sample_rate} -c {config.channels} {output_file}")
+    print(
+        f"  aplay -f S16_LE -r {config.sample_rate} -c {config.channels} {output_file}"
+    )
     print()
     print("To convert to WAV:")
-    print(f"  sox -r {config.sample_rate} -e signed -b {config.bit_depth} -c {config.channels} \\")
+    print(
+        f"  sox -r {config.sample_rate} -e signed -b {config.bit_depth} -c {config.channels} \\"
+    )
     print(f"      {output_file} {output_file.replace('.raw', '.wav')}")

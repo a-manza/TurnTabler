@@ -40,6 +40,7 @@ class AudioDevice:
         card_name: Human-readable card name (e.g., 'UCA222')
         device_number: Device number (typically 0)
     """
+
     device_name: str
     card_number: int
     card_name: str
@@ -59,7 +60,7 @@ class USBAudioDeviceManager:
     """
 
     # Patterns for internal sound cards to filter out
-    INTERNAL_CARD_PATTERNS = ['PCH', 'Intel', 'Analog', 'Built-in', 'HDA']
+    INTERNAL_CARD_PATTERNS = ["PCH", "Intel", "Analog", "Built-in", "HDA"]
 
     @staticmethod
     def list_capture_devices() -> List[AudioDevice]:
@@ -85,7 +86,7 @@ class USBAudioDeviceManager:
             return devices
 
         # Regex to parse hw:CARD=CardName,DEV=N format
-        hw_pattern = re.compile(r'hw:CARD=([^,]+),DEV=(\d+)')
+        hw_pattern = re.compile(r"hw:CARD=([^,]+),DEV=(\d+)")
 
         for dev_str in alsa_devices:
             match = hw_pattern.match(dev_str)
@@ -96,12 +97,14 @@ class USBAudioDeviceManager:
                 # Extract card number if possible
                 card_num = USBAudioDeviceManager._get_card_number(dev_str)
 
-                devices.append(AudioDevice(
-                    device_name=dev_str,
-                    card_number=card_num,
-                    card_name=card_name,
-                    device_number=dev_num
-                ))
+                devices.append(
+                    AudioDevice(
+                        device_name=dev_str,
+                        card_number=card_num,
+                        card_name=card_name,
+                        device_number=dev_num,
+                    )
+                )
 
         logger.debug(f"Found {len(devices)} ALSA capture device(s)")
         return devices
@@ -121,7 +124,7 @@ class USBAudioDeviceManager:
             Card number (0, 1, 2, ...) or -1 if unknown
         """
         # Try to match hw:X,Y format first
-        simple_pattern = re.compile(r'hw:(\d+),(\d+)')
+        simple_pattern = re.compile(r"hw:(\d+),(\d+)")
         match = simple_pattern.match(device_str)
         if match:
             return int(match.group(1))
@@ -156,9 +159,12 @@ class USBAudioDeviceManager:
 
         # Filter out internal sound cards
         usb_devices = [
-            dev for dev in devices
-            if not any(p.lower() in dev.card_name.lower()
-                      for p in USBAudioDeviceManager.INTERNAL_CARD_PATTERNS)
+            dev
+            for dev in devices
+            if not any(
+                p.lower() in dev.card_name.lower()
+                for p in USBAudioDeviceManager.INTERNAL_CARD_PATTERNS
+            )
         ]
 
         logger.debug(f"Found {len(usb_devices)} USB audio device(s) after filtering")
@@ -213,23 +219,17 @@ class USBAudioDeviceManager:
         try:
             # Open device temporarily to verify accessibility
             pcm = alsaaudio.PCM(
-                alsaaudio.PCM_CAPTURE,
-                alsaaudio.PCM_NORMAL,
-                device=device_name
+                alsaaudio.PCM_CAPTURE, alsaaudio.PCM_NORMAL, device=device_name
             )
             pcm.close()
 
             return {
-                'device': device_name,
-                'accessible': True,
+                "device": device_name,
+                "accessible": True,
             }
 
         except alsaaudio.ALSAAudioError as e:
-            return {
-                'device': device_name,
-                'accessible': False,
-                'error': str(e)
-            }
+            return {"device": device_name, "accessible": False, "error": str(e)}
 
 
 def detect_usb_audio_device(preferred_device: Optional[str] = None) -> Optional[str]:
@@ -256,11 +256,11 @@ def detect_usb_audio_device(preferred_device: Optional[str] = None) -> Optional[
 
 
 # Example usage and testing
-if __name__ == '__main__':
+if __name__ == "__main__":
     # Configure logging for standalone execution
     logging.basicConfig(
         level=logging.INFO,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     )
 
     print("=" * 60)
@@ -283,7 +283,7 @@ if __name__ == '__main__':
         # Get device info
         info = manager.get_device_info(dev.device_name)
         print(f"  Accessible: {info['accessible']}")
-        if not info['accessible']:
+        if not info["accessible"]:
             print(f"  Error: {info.get('error', 'Unknown')}")
         print()
 
@@ -301,7 +301,7 @@ if __name__ == '__main__':
 
         # Test accessibility
         info = manager.get_device_info(usb_device.device_name)
-        if info['accessible']:
+        if info["accessible"]:
             print("Device is accessible and ready to use")
         else:
             print(f"Device found but not accessible: {info.get('error')}")

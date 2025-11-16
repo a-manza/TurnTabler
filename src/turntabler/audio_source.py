@@ -17,6 +17,7 @@ from dataclasses import dataclass
 @dataclass
 class AudioFormat:
     """Audio format specification."""
+
     sample_rate: int = 48000
     channels: int = 2
     bits_per_sample: int = 16
@@ -73,10 +74,7 @@ class SyntheticAudioSource(AudioSource):
     """
 
     def __init__(
-        self,
-        format: AudioFormat,
-        frequency: float = 440.0,
-        amplitude: float = 0.5
+        self, format: AudioFormat, frequency: float = 440.0, amplitude: float = 0.5
     ):
         """
         Initialize synthetic audio source.
@@ -112,7 +110,7 @@ class SyntheticAudioSource(AudioSource):
 
                 # Convert to little-endian bytes
                 for _ in range(self.format.channels):
-                    audio_data.extend(struct.pack('<h', pcm_value))
+                    audio_data.extend(struct.pack("<h", pcm_value))
             else:
                 raise ValueError(
                     f"Unsupported bit depth: {self.format.bits_per_sample}"
@@ -149,11 +147,11 @@ class FileAudioSource(AudioSource):
 
     def _open(self):
         """Open WAV file and locate data chunk."""
-        self._file = open(self.file_path, 'rb')
+        self._file = open(self.file_path, "rb")
 
         # Parse WAV header
         header = self._file.read(12)
-        if not header.startswith(b'RIFF'):
+        if not header.startswith(b"RIFF"):
             # Assume raw PCM
             self._file.seek(0)
             self._data_start = 0
@@ -166,9 +164,9 @@ class FileAudioSource(AudioSource):
                 break
 
             chunk_id = chunk_header[:4]
-            chunk_size = struct.unpack('<I', chunk_header[4:8])[0]
+            chunk_size = struct.unpack("<I", chunk_header[4:8])[0]
 
-            if chunk_id == b'data':
+            if chunk_id == b"data":
                 self._data_start = self._file.tell()
                 break
             else:
@@ -235,7 +233,7 @@ class USBAudioSource(AudioSource):
         except ImportError:
             raise ImportError(
                 "USB audio requires pyalsaaudio. "
-                "Install with: uv pip install -e \".[usb]\""
+                'Install with: uv pip install -e ".[usb]"'
             )
 
         self.format = format
@@ -267,7 +265,7 @@ class USBAudioSource(AudioSource):
             channels=format.channels,
             sample_format=SampleFormat.S16_LE,  # UCA202 native format
             period_size=1024,  # ~21ms latency (appropriate for vinyl)
-            periods=3          # USB audio recommended buffer
+            periods=3,  # USB audio recommended buffer
         )
 
         # Initialize capture
@@ -317,7 +315,7 @@ class USBAudioSource(AudioSource):
 
     def close(self):
         """Close USB audio capture and release ALSA resources."""
-        if hasattr(self, '_stream') and self._stream:
+        if hasattr(self, "_stream") and self._stream:
             try:
                 self.capture.stop()
                 self.logger.info("Stopped USB capture stream")
@@ -326,7 +324,7 @@ class USBAudioSource(AudioSource):
             finally:
                 self._stream = None
 
-        if hasattr(self, 'capture') and self.capture:
+        if hasattr(self, "capture") and self.capture:
             try:
                 self.capture.close()
                 self.logger.info("USB audio source closed")

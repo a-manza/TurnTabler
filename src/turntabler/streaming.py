@@ -20,7 +20,12 @@ from typing import Optional
 from dataclasses import dataclass
 
 # Local imports
-from turntabler.audio_source import AudioFormat, SyntheticAudioSource, FileAudioSource, USBAudioSource
+from turntabler.audio_source import (
+    AudioFormat,
+    SyntheticAudioSource,
+    FileAudioSource,
+    USBAudioSource,
+)
 from turntabler.streaming_wav import WAVStreamingServer
 
 # SoCo import
@@ -36,6 +41,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class StreamingStats:
     """Statistics from a streaming session"""
+
     duration_seconds: float
     final_state: str = "UNKNOWN"
     errors: list[str] = None
@@ -63,7 +69,7 @@ class TurnTablerStreamer:
         test_duration_seconds: Optional[int] = None,
         host: str = "0.0.0.0",
         port: int = 5901,
-        stream_name: str = "TurnTabler"
+        stream_name: str = "TurnTabler",
     ):
         """
         Initialize streamer.
@@ -131,7 +137,9 @@ class TurnTablerStreamer:
 
         return ip
 
-    def setup_audio_source(self, source_type: str = "synthetic", device: Optional[str] = None) -> bool:
+    def setup_audio_source(
+        self, source_type: str = "synthetic", device: Optional[str] = None
+    ) -> bool:
         """
         Setup audio source.
 
@@ -147,9 +155,7 @@ class TurnTablerStreamer:
         if source_type == "synthetic":
             logger.info(f"Creating synthetic audio source ({self.audio_frequency}Hz)")
             self.audio_source = SyntheticAudioSource(
-                format=audio_format,
-                frequency=self.audio_frequency,
-                amplitude=0.5
+                format=audio_format, frequency=self.audio_frequency, amplitude=0.5
             )
             return True
 
@@ -171,7 +177,7 @@ class TurnTablerStreamer:
                 return True
             except ImportError as e:
                 logger.error(f"USB audio not available: {e}")
-                logger.error("Install with: uv pip install -e \".[usb]\"")
+                logger.error('Install with: uv pip install -e ".[usb]"')
                 return False
             except RuntimeError as e:
                 logger.error(f"Failed to initialize USB audio: {e}")
@@ -192,7 +198,7 @@ class TurnTablerStreamer:
             self.server = WAVStreamingServer(
                 audio_source=self.audio_source,
                 wav_format=audio_format,
-                stream_name=self.stream_name
+                stream_name=self.stream_name,
             )
             logger.info("WAV streaming server initialized")
             return True
@@ -259,7 +265,7 @@ class TurnTablerStreamer:
                 uri=stream_url,
                 title=self.stream_name,
                 start=True,
-                force_radio=False  # Plain HTTP, no force_radio
+                force_radio=False,  # Plain HTTP, no force_radio
             )
 
             logger.info("Playback started on Sonos")
@@ -270,9 +276,9 @@ class TurnTablerStreamer:
                 time.sleep(1)
                 try:
                     info = self.sonos.get_current_transport_info()
-                    state = info['current_transport_state']
-                    track = self.sonos.get_current_track_info().get('title', 'N/A')
-                    logger.info(f"  [{i+1}s] State: {state:12} | Title: {track}")
+                    state = info["current_transport_state"]
+                    track = self.sonos.get_current_track_info().get("title", "N/A")
+                    logger.info(f"  [{i + 1}s] State: {state:12} | Title: {track}")
 
                     if state == "PLAYING":
                         logger.info("✅ Audio is playing!")
@@ -302,6 +308,7 @@ class TurnTablerStreamer:
             True if server is ready, False if timeout
         """
         import socket
+
         start = time.time()
         local_ip = self.get_local_ip()
         server_addr = (local_ip, self.port)
@@ -344,12 +351,7 @@ class TurnTablerStreamer:
         # Run with uvicorn in background
         import uvicorn
 
-        config = uvicorn.Config(
-            app,
-            host=self.host,
-            port=self.port,
-            log_level="info"
-        )
+        config = uvicorn.Config(app, host=self.host, port=self.port, log_level="info")
         server = uvicorn.Server(config)
 
         # Run in background thread
@@ -389,7 +391,7 @@ class TurnTablerStreamer:
                         if self.sonos:
                             try:
                                 state = self.sonos.get_current_transport_info()[
-                                    'current_transport_state'
+                                    "current_transport_state"
                                 ]
                                 logger.info(f"  Sonos state: {state}")
                             except Exception as e:
@@ -402,7 +404,7 @@ class TurnTablerStreamer:
                         if self.sonos:
                             try:
                                 state = self.sonos.get_current_transport_info()[
-                                    'current_transport_state'
+                                    "current_transport_state"
                                 ]
                                 logger.info(f"  Sonos state: {state}")
                             except Exception as e:
@@ -415,7 +417,9 @@ class TurnTablerStreamer:
         finally:
             self.stop_requested = True
 
-    def run(self, audio_source: str = "synthetic", device: Optional[str] = None) -> StreamingStats:
+    def run(
+        self, audio_source: str = "synthetic", device: Optional[str] = None
+    ) -> StreamingStats:
         """
         Run complete streaming session.
 
@@ -435,16 +439,28 @@ class TurnTablerStreamer:
 
         # Setup
         if not self.setup_audio_source(audio_source, device=device):
-            return StreamingStats(duration_seconds=0, final_state="SETUP_FAILED", errors=["Audio source setup failed"])
+            return StreamingStats(
+                duration_seconds=0,
+                final_state="SETUP_FAILED",
+                errors=["Audio source setup failed"],
+            )
 
         if not self.setup_streaming_server():
-            return StreamingStats(duration_seconds=0, final_state="SETUP_FAILED", errors=["Server setup failed"])
+            return StreamingStats(
+                duration_seconds=0,
+                final_state="SETUP_FAILED",
+                errors=["Server setup failed"],
+            )
 
         # CRITICAL: Start HTTP server FIRST, before telling Sonos to connect
         # This prevents race condition where Sonos tries to fetch stream before server is ready
         if not self.start_http_server_background():
             logger.error("HTTP server failed to start")
-            return StreamingStats(duration_seconds=0, final_state="SERVER_FAILED", errors=["HTTP server failed to start"])
+            return StreamingStats(
+                duration_seconds=0,
+                final_state="SERVER_FAILED",
+                errors=["HTTP server failed to start"],
+            )
 
         # Now setup Sonos (after server is ready)
         if not self.setup_sonos():
@@ -472,7 +488,7 @@ class TurnTablerStreamer:
         if self.sonos:
             try:
                 info = self.sonos.get_current_transport_info()
-                final_state = info.get('current_transport_state', 'UNKNOWN')
+                final_state = info.get("current_transport_state", "UNKNOWN")
             except Exception:
                 final_state = "UNKNOWN"
 
@@ -495,7 +511,5 @@ class TurnTablerStreamer:
         logger.info("=" * 60)
 
         return StreamingStats(
-            duration_seconds=elapsed,
-            final_state=final_state,
-            errors=errors
+            duration_seconds=elapsed, final_state=final_state, errors=errors
         )

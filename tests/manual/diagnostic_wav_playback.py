@@ -47,7 +47,7 @@ def main():
     print(f"   Sending commands to: {playback_device.player_name}")
 
     # Check and adjust volume
-    print(f"\n📊 Device Status:")
+    print("\n📊 Device Status:")
     print(f"  Volume: {playback_device.volume}%")
     print(f"  Muted: {playback_device.mute}")
 
@@ -62,7 +62,7 @@ def main():
     my_ip = get_my_ip()
     stream_url = f"http://{my_ip}:8000/turntable.wav"
 
-    print(f"\n🎵 Testing WAV file (uncompressed control test)")
+    print("\n🎵 Testing WAV file (uncompressed control test)")
     print(f"📻 Stream URL: {stream_url}")
 
     try:

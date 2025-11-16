@@ -9,9 +9,8 @@ from typing import Optional
 from pathlib import Path
 from typing_extensions import Annotated
 import logging
-import sys
 
-from turntabler.streaming import TurnTablerStreamer, StreamingStats
+from turntabler.streaming import TurnTablerStreamer
 from turntabler.usb_audio import USBAudioDeviceManager
 
 # Create Typer app
@@ -40,8 +39,7 @@ def setup_logging(verbose: bool = False, quiet: bool = False):
         level = logging.INFO
 
     logging.basicConfig(
-        level=level,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+        level=level, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
     )
 
 
@@ -49,52 +47,38 @@ def setup_logging(verbose: bool = False, quiet: bool = False):
 def stream(
     # Audio source selection (mutually exclusive via logic)
     synthetic: Annotated[
-        bool,
-        typer.Option("--synthetic", help="Generate test tone (440Hz sine wave)")
+        bool, typer.Option("--synthetic", help="Generate test tone (440Hz sine wave)")
     ] = False,
     file: Annotated[
-        Optional[Path],
-        typer.Option("--file", help="Stream from WAV file")
+        Optional[Path], typer.Option("--file", help="Stream from WAV file")
     ] = None,
-
     # Source-specific options
     device: Annotated[
         Optional[str],
-        typer.Option("--device", help="USB ALSA device (auto-detect if omitted)")
+        typer.Option("--device", help="USB ALSA device (auto-detect if omitted)"),
     ] = None,
     frequency: Annotated[
-        float,
-        typer.Option("--frequency", help="Tone frequency for synthetic (Hz)")
+        float, typer.Option("--frequency", help="Tone frequency for synthetic (Hz)")
     ] = 440.0,
-
     # Sonos configuration
     sonos_ip: Annotated[
         Optional[str],
-        typer.Option("--sonos-ip", help="Sonos speaker IP (auto-discover if omitted)")
+        typer.Option("--sonos-ip", help="Sonos speaker IP (auto-discover if omitted)"),
     ] = None,
     stream_name: Annotated[
-        str,
-        typer.Option("--stream-name", help="Display name in Sonos app")
+        str, typer.Option("--stream-name", help="Display name in Sonos app")
     ] = "TurnTabler",
-
     # Server configuration
     host: Annotated[
-        str,
-        typer.Option("--host", help="Server bind address")
+        str, typer.Option("--host", help="Server bind address")
     ] = "0.0.0.0",
-    port: Annotated[
-        int,
-        typer.Option("--port", help="Server port")
-    ] = 5901,
-
+    port: Annotated[int, typer.Option("--port", help="Server port")] = 5901,
     # Logging
     verbose: Annotated[
-        bool,
-        typer.Option("--verbose", "-v", help="Enable debug logging")
+        bool, typer.Option("--verbose", "-v", help="Enable debug logging")
     ] = False,
     quiet: Annotated[
-        bool,
-        typer.Option("--quiet", "-q", help="Minimal output")
+        bool, typer.Option("--quiet", "-q", help="Minimal output")
     ] = False,
 ):
     """
@@ -127,7 +111,7 @@ def stream(
         typer.secho(
             "Error: Cannot use both --synthetic and --file",
             fg=typer.colors.RED,
-            err=True
+            err=True,
         )
         raise typer.Exit(1)
 
@@ -137,11 +121,7 @@ def stream(
         typer.echo(f"🎵 Audio source: Synthetic ({frequency}Hz sine wave)")
     elif file:
         if not file.exists():
-            typer.secho(
-                f"Error: File not found: {file}",
-                fg=typer.colors.RED,
-                err=True
-            )
+            typer.secho(f"Error: File not found: {file}", fg=typer.colors.RED, err=True)
             raise typer.Exit(1)
         source_type = f"file:{file}"
         typer.echo(f"🎵 Audio source: File ({file.name})")
@@ -158,17 +138,19 @@ def stream(
                 if not detected:
                     typer.secho(
                         "⚠️  Warning: No USB audio device detected",
-                        fg=typer.colors.YELLOW
+                        fg=typer.colors.YELLOW,
                     )
                     typer.echo("\nTroubleshooting:")
                     typer.echo("  • List devices: turntabler list")
                     typer.echo("  • Test with synthetic: turntabler stream --synthetic")
-                    typer.echo("\nContinuing anyway (will fail if USB unavailable)...\n")
+                    typer.echo(
+                        "\nContinuing anyway (will fail if USB unavailable)...\n"
+                    )
             except Exception as e:
                 if not quiet:
                     typer.secho(
                         f"⚠️  Warning: Could not detect USB device: {e}",
-                        fg=typer.colors.YELLOW
+                        fg=typer.colors.YELLOW,
                     )
 
     # Display configuration
@@ -185,7 +167,7 @@ def stream(
             test_duration_seconds=None,  # Run indefinitely
             host=host,
             port=port,
-            stream_name=stream_name
+            stream_name=stream_name,
         )
 
         stats = streamer.run(audio_source=source_type, device=device)
@@ -200,7 +182,7 @@ def stream(
         typer.echo()
         typer.secho(
             f"✓ Streaming completed: {int(stats.duration_seconds)}s",
-            fg=typer.colors.GREEN
+            fg=typer.colors.GREEN,
         )
 
     except KeyboardInterrupt:
@@ -218,15 +200,11 @@ def stream(
 def test_quick(
     sonos_ip: Annotated[
         Optional[str],
-        typer.Option("--sonos-ip", help="Sonos speaker IP (auto-discover if omitted)")
+        typer.Option("--sonos-ip", help="Sonos speaker IP (auto-discover if omitted)"),
     ] = None,
-    port: Annotated[
-        int,
-        typer.Option("--port", help="Server port")
-    ] = 5901,
+    port: Annotated[int, typer.Option("--port", help="Server port")] = 5901,
     verbose: Annotated[
-        bool,
-        typer.Option("--verbose", "-v", help="Enable debug logging")
+        bool, typer.Option("--verbose", "-v", help="Enable debug logging")
     ] = False,
 ):
     """
@@ -249,7 +227,7 @@ def test_quick(
             audio_frequency=440.0,
             test_duration_seconds=30,
             port=port,
-            stream_name="TurnTabler Quick Test"
+            stream_name="TurnTabler Quick Test",
         )
 
         stats = streamer.run(audio_source="synthetic")
@@ -284,27 +262,23 @@ def test_quick(
 def test_full(
     sonos_ip: Annotated[
         Optional[str],
-        typer.Option("--sonos-ip", help="Sonos speaker IP (auto-discover if omitted)")
+        typer.Option("--sonos-ip", help="Sonos speaker IP (auto-discover if omitted)"),
     ] = None,
     duration: Annotated[
-        int,
-        typer.Option("--duration", help="Test duration in seconds")
+        int, typer.Option("--duration", help="Test duration in seconds")
     ] = 600,
     source: Annotated[
         str,
-        typer.Option("--source", help="Audio source: 'synthetic', 'file:<path>', or 'usb'")
+        typer.Option(
+            "--source", help="Audio source: 'synthetic', 'file:<path>', or 'usb'"
+        ),
     ] = "synthetic",
     device: Annotated[
-        Optional[str],
-        typer.Option("--device", help="USB ALSA device (for USB source)")
+        Optional[str], typer.Option("--device", help="USB ALSA device (for USB source)")
     ] = None,
-    port: Annotated[
-        int,
-        typer.Option("--port", help="Server port")
-    ] = 5901,
+    port: Annotated[int, typer.Option("--port", help="Server port")] = 5901,
     verbose: Annotated[
-        bool,
-        typer.Option("--verbose", "-v", help="Enable debug logging")
+        bool, typer.Option("--verbose", "-v", help="Enable debug logging")
     ] = False,
 ):
     """
@@ -336,7 +310,7 @@ def test_full(
             sonos_ip=sonos_ip,
             test_duration_seconds=duration,
             port=port,
-            stream_name="TurnTabler Full Test"
+            stream_name="TurnTabler Full Test",
         )
 
         stats = streamer.run(audio_source=source, device=device)
@@ -397,13 +371,11 @@ def list_devices():
         for device in devices:
             typer.echo(f"  • {device.device_name} ({device.card_name})")
 
-        typer.echo(f"\nUse with: turntabler stream --device <name>")
+        typer.echo("\nUse with: turntabler stream --device <name>")
 
     except ImportError as e:
         typer.secho(
-            f"Error: pyalsaaudio not available: {e}",
-            fg=typer.colors.RED,
-            err=True
+            f"Error: pyalsaaudio not available: {e}", fg=typer.colors.RED, err=True
         )
         typer.echo("Install with: uv add pyalsaaudio", err=True)
         raise typer.Exit(1)

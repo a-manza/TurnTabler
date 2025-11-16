@@ -37,7 +37,7 @@ def main():
     print(f"   Sending commands to: {playback_device.player_name}")
 
     # Check volume and mute state before testing
-    print(f"\n📊 Device Status Before Test:")
+    print("\n📊 Device Status Before Test:")
     print(f"  Volume: {playback_device.volume}%")
     print(f"  Muted: {playback_device.mute}")
 
