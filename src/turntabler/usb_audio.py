@@ -19,12 +19,12 @@ Typical usage:
     ...     print(f"{dev.card_name}: {dev.device_name}")
 """
 
-import alsaaudio
-import re
 import logging
-from typing import Optional, List
+import re
 from dataclasses import dataclass
+from typing import List, Optional
 
+import alsaaudio
 
 logger = logging.getLogger(__name__)
 

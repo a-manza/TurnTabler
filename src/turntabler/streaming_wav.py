@@ -8,10 +8,10 @@ Supports both file-based streaming (POC) and real-time USB audio capture.
 """
 
 import asyncio
-import struct
 import logging
-from typing import Optional, AsyncGenerator, Any
+import struct
 from dataclasses import dataclass
+from typing import Any, AsyncGenerator, Optional
 
 from fastapi import FastAPI, Request
 from fastapi.responses import StreamingResponse
@@ -254,41 +254,3 @@ def run_server(
     logger.info(f"Stream URL: http://{host}:{port}/stream.wav")
 
     uvicorn.run(app, host=host, port=port, log_level="info")
-
-
-# Standalone testing
-if __name__ == "__main__":
-    import sys
-    from pathlib import Path
-
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    )
-
-    if len(sys.argv) < 2:
-        print("Usage: python -m turntabler.streaming_wav <wav_file>")
-        print("\nExample:")
-        print("  python -m turntabler.streaming_wav test-loop.wav")
-        sys.exit(1)
-
-    wav_file = Path(sys.argv[1])
-
-    if not wav_file.exists():
-        print(f"Error: File not found: {wav_file}")
-        sys.exit(1)
-
-    print("Starting WAV streaming server")
-    print(f"Source: {wav_file}")
-    print("Format: 48kHz, 2ch, 16-bit (1.5 Mbps)")
-    print("Stream URL: http://0.0.0.0:5901/stream.wav")
-    print("\nPress Ctrl+C to stop\n")
-
-    audio_source = FileAudioSource(wav_file, loop=True)
-
-    try:
-        run_server(audio_source)
-    except KeyboardInterrupt:
-        print("\nServer stopped")
-    finally:
-        audio_source.close()

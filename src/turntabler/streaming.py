@@ -11,21 +11,17 @@ This module provides the production streaming pipeline:
 Extracted from validated e2e test code - production-ready.
 """
 
-import socket
-import time
 import logging
+import socket
 import threading
+import time
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
-from dataclasses import dataclass
 
 # Local imports
-from turntabler.audio_source import (
-    AudioFormat,
-    SyntheticAudioSource,
-    FileAudioSource,
-    USBAudioSource,
-)
+from turntabler.audio_source import (AudioFormat, FileAudioSource,
+                                     SyntheticAudioSource, USBAudioSource)
 from turntabler.streaming_wav import WAVStreamingServer
 
 # SoCo import

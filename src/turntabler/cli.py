@@ -4,11 +4,12 @@ TurnTabler CLI - Stream vinyl records to Sonos speakers.
 Simple, modern CLI using Typer with production-first defaults.
 """
 
-import typer
-from typing import Optional
-from pathlib import Path
-from typing_extensions import Annotated
 import logging
+from pathlib import Path
+from typing import Optional
+
+import typer
+from typing_extensions import Annotated
 
 from turntabler.streaming import TurnTablerStreamer
 from turntabler.usb_audio import USBAudioDeviceManager

@@ -3,9 +3,10 @@ Test with WAV file to isolate FLAC encoding issues.
 WAV is uncompressed, simplest audio format - good control test.
 """
 
-from soco import discover
 import socket
 import time
+
+from soco import discover
 
 
 def get_my_ip():

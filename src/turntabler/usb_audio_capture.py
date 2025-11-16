@@ -29,13 +29,13 @@ Typical usage:
     ...     capture.close()
 """
 
-import alsaaudio
-import time
 import logging
-from typing import Optional, Callable, Generator
+import time
 from dataclasses import dataclass
 from enum import Enum
+from typing import Callable, Generator, Optional
 
+import alsaaudio
 
 logger = logging.getLogger(__name__)
 
@@ -413,6 +413,7 @@ class USBAudioCapture:
 # Example usage and testing
 if __name__ == "__main__":
     import sys
+
     from turntabler.usb_audio import detect_usb_audio_device
 
     # Configure logging for standalone execution

@@ -4,8 +4,9 @@ If this plays audio, it proves SoCo/Sonos infrastructure works.
 If this fails, the problem is device configuration, not our code.
 """
 
-from soco import discover
 import time
+
+from soco import discover
 
 
 def main():

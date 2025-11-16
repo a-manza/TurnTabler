@@ -7,11 +7,11 @@ Defines the interface and implementations for audio sources:
 - USB-based (for production with turntable)
 """
 
-import struct
 import math
+import struct
 from abc import ABC, abstractmethod
-from typing import Optional
 from dataclasses import dataclass
+from typing import Optional
 
 
 @dataclass
@@ -228,8 +228,9 @@ class USBAudioSource(AudioSource):
 
         # Check pyalsaaudio availability
         try:
-            from .usb_audio_capture import USBAudioCapture, CaptureConfig, SampleFormat
             from .usb_audio import detect_usb_audio_device
+            from .usb_audio_capture import (CaptureConfig, SampleFormat,
+                                            USBAudioCapture)
         except ImportError:
             raise ImportError(
                 "USB audio requires pyalsaaudio. "
