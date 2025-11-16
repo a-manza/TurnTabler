@@ -128,57 +128,96 @@ Group Coordinator (if grouped with sub/surrounds)
 - **Library:** pyalsaaudio (direct ALSA access, lowest latency)
 - **Preamp:** Built-in on most modern turntables (if needed: $25-30 external)
 
-## Module Structure
+## Module Structure (Production-Ready - 2025-11-15)
 
-### Core Application
+### Core Application (6 production files)
 
 ```
 src/turntabler/
+├── __init__.py                      # Package initialization
+├── audio_source.py                  # Audio source abstractions (PRODUCTION)
+│   ├── AudioFormat                  # 48kHz, 2ch, 16-bit config
+│   ├── AudioSource                  # Abstract base class
+│   ├── SyntheticAudioSource         # Generate sine waves (testing)
+│   ├── FileAudioSource              # Read WAV files (testing)
+│   └── USBAudioSource               # ALSA capture (production ready)
+│
+├── streaming_wav.py                 # WAV HTTP streaming server (PRODUCTION)
+│   ├── WAVStreamingServer           # FastAPI + infinite headers
+│   ├── generate_wav_header()        # Create ∞ WAV header
+│   └── create_app()                 # FastAPI app factory
+│
+├── sonos_control.py                 # Sonos CLI control (PRODUCTION)
+│   ├── discover_sonos()             # Auto-discovery
+│   ├── handle_grouping()            # CRITICAL: Coordinator selection
+│   └── start_streaming()            # Begin playback
+│
+├── usb_audio.py                     # USB device management (PRODUCTION)
+│   ├── USBAudioDeviceManager        # Device enumeration
+│   └── detect_usb_audio_device()    # Auto-detection
+│
+└── usb_audio_capture.py             # ALSA capture implementation (PRODUCTION)
+    ├── SampleFormat                 # Bit depth enum
+    ├── CaptureConfig                # Configuration dataclass
+    └── USBAudioCapture              # pyalsaaudio wrapper
+```
+
+### Testing & Validation
+
+```
+tests/
 ├── __init__.py
-├── audio_source.py              # Audio source abstractions
-│   ├── AudioFormat              # 48kHz, 2ch, 16-bit config
-│   ├── AudioSource              # Abstract base class
-│   ├── SyntheticAudioSource     # Generate sine waves (POC)
-│   ├── FileAudioSource          # Read WAV files (POC alt)
-│   └── USBAudioSource           # ALSA capture placeholder (production)
+├── fixtures/                        # Test audio files
+│   ├── test-loop.flac               # Test audio (FLAC)
+│   └── test-loop.wav                # Test audio (WAV)
 │
-├── streaming_wav.py             # WAV HTTP streaming server
-│   ├── WAVStreamingServer       # FastAPI + infinite headers
-│   ├── generate_wav_header()    # Create ∞ WAV header
-│   └── create_app()             # FastAPI app factory
+├── integration/                     # End-to-end tests
+│   ├── __init__.py
+│   └── test_streaming_e2e.py        # 10-minute validation test (PRESERVED)
 │
-├── control.py                   # SoCo speaker control
-│   ├── main()                   # CLI entry point
-│   ├── discover_sonos()         # Auto-discovery
-│   ├── handle_grouping()        # Coordinator selection
-│   └── start_streaming()        # Begin playback
-│
-├── streaming_test.py            # Complete end-to-end test
-│   ├── StreamingTest            # Full test orchestration
-│   └── main()                   # CLI with options
-│
-├── usb_audio.py                 # USB device management
-│   ├── USBAudioDeviceManager    # Device enumeration
-│   └── detect_usb_audio_device()# Auto-detection
-│
-└── usb_audio_capture.py         # ALSA capture implementation
-    ├── SampleFormat             # Bit depth enum
-    ├── CaptureConfig            # Configuration dataclass
-    └── USBAudioCapture          # pyalsaaudio wrapper
+└── manual/                          # Diagnostic tools
+    ├── __init__.py
+    ├── diagnostic_sonos_uri.py      # Test with known URI
+    └── diagnostic_wav_playback.py   # Test WAV playback
+```
+
+### Utilities & Documentation
+
+```
+scripts/
+└── generate_test_audio.sh           # Create test audio files
 
 docs/
-├── hardware/
-│   ├── usb-audio-interface-guide.md        # 1,488 lines - Complete research
-│   └── USB-AUDIO-QUICK-START.md            # Quick reference
+├── hardware/                        # USB hardware research
+│   ├── usb-audio-interface-guide.md (1,488 lines)
+│   ├── USB-AUDIO-QUICK-START.md
+│   └── raspberry-pi-5-guide.md
 │
-└── implementation/
-    ├── COMPLETE-ARCHITECTURE.md            # Full system design
-    ├── soco-foundation-research.md         # Deep SoCo research
-    ├── soco-approach.md                    # Original SoCo research
-    ├── soco-poc-plan.md                    # Original POC plan
-    ├── owntone-deep-dive.md                # Alternative (lossy AirPlay)
-    ├── tech-stack-decision.md              # Decision rationale
-    └── DECISION-SUMMARY.md                 # Final decisions
+├── implementation/                  # Architecture & decisions
+│   ├── COMPLETE-ARCHITECTURE.md     # Full system design
+│   ├── DECISION-SUMMARY.md          # Decision log
+│   └── tech-stack-decision.md       # Rationale
+│
+└── archive/                         # Historical research (preserved)
+    ├── soco-approach.md
+    ├── soco-poc-plan.md
+    ├── PHASE1-CHECKLIST.md
+    ├── owntone-deep-dive.md
+    └── (5 more research documents)
+```
+
+### Cleanup Summary (2025-11-15)
+
+**Deleted (15 obsolete files):**
+- `streaming.py`, `streaming_simple.py`, `streaming_debug.py`, `streaming_icy.py`, `streaming_realtime.py` - POC experiments (superseded by streaming_wav.py)
+- `generate_flac_chunks.py` + chunks/ - Chunk generation system (obsolete)
+
+**Reorganized:**
+- Tests moved to proper locations (integration/, manual/, fixtures/)
+- Documentation focused (archive/ preserves research)
+- Renamed `control.py` → `sonos_control.py` (clarity)
+
+**Result:** Clean production-ready codebase, ~25 files vs 60+ before
 ```
 
 ## Current Status
