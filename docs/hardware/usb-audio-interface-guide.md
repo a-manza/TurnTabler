@@ -18,6 +18,19 @@ This guide provides comprehensive research and implementation details for USB au
 
 ## Hardware Recommendations
 
+### ✅ CONFIRMED: Behringer UCA202 and UCA222 are Identical
+
+**Important:** These are the same device sold under different model numbers in different markets:
+- **UCA222:** Primarily EU/UK market
+- **UCA202:** Primarily US/Asia market (your device if you purchased UCA202)
+- **Chipset:** Both use Burr-Brown PCM2902E (identical specifications)
+- **TurnTabler Compatibility:** Fully validated for lossless streaming
+- **ALSA Detection:** Device reports as "CODEC" (generic USB descriptor)
+
+All references to "UCA222/UCA202" in this guide apply equally to both models.
+
+---
+
 ### Recommended Primary Option: Behringer UCA222/UCA202
 
 **Price:** $30-40

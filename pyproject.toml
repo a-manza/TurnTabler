@@ -6,6 +6,6 @@ readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
     "soco",
-    "fastapi",
-    "uvicorn[standard]",
+    "fastapi[standard]",
+    "pyalsaaudio>=0.10.0",
 ]

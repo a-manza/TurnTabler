@@ -22,6 +22,8 @@
 git clone https://github.com/yourusername/turntabler
 cd turntabler
 uv venv && source .venv/bin/activate
+
+# Install
 uv pip install -e .
 
 # Run 10-minute validation test with synthetic audio
@@ -89,10 +91,11 @@ This pattern is implemented in `sonos_control.py` and validated in our test suit
 
 ### Recommended Hardware
 
-**Behringer UCA222** (~$40)
+**Behringer UCA202/UCA222** (~$40)
 - 16-bit/48kHz (matches Sonos maximum, exceeds vinyl quality)
 - Proven Linux/ALSA compatibility
 - USB 1.1 sufficient for lossless audio
+- **Note:** UCA202 and UCA222 are identical (different market names for the same device)
 
 ### Installation Steps
 

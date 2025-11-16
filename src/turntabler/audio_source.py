@@ -200,31 +200,135 @@ class USBAudioSource(AudioSource):
     """
     Capture audio from USB interface.
 
-    This is a placeholder for the production USB audio capture.
-    When integrated, this will use pyalsaaudio to capture from
-    a Behringer UCA222 or similar USB audio interface.
+    Production implementation for real-time audio capture from USB audio
+    interfaces like the Behringer UCA202/UCA222.
+
+    Requires: pyalsaaudio (install with: uv pip install -e ".[usb]")
     """
 
-    def __init__(self, format: AudioFormat, device: str = 'default'):
+    def __init__(self, format: AudioFormat, device: Optional[str] = None):
         """
         Initialize USB audio source.
 
         Args:
-            format: Audio format
-            device: ALSA device name (e.g., 'hw:2,0')
+            format: Audio format specification (48kHz, 2ch, 16-bit recommended)
+            device: ALSA device name (e.g., 'hw:CARD=CODEC,DEV=0').
+                   If None, auto-detects first USB audio device.
 
         Raises:
-            NotImplementedError: USB audio not yet implemented
+            ImportError: If pyalsaaudio not installed
+            RuntimeError: If no USB audio device found or failed to open
+
+        Example:
+            # Auto-detect UCA202
+            source = USBAudioSource(AudioFormat())
+
+            # Specify device manually
+            source = USBAudioSource(AudioFormat(), device='hw:CARD=CODEC,DEV=0')
         """
-        raise NotImplementedError(
-            "USB audio capture requires USB hardware and pyalsaaudio. "
-            "Use SyntheticAudioSource or FileAudioSource for testing."
+        import logging
+
+        # Check pyalsaaudio availability
+        try:
+            from .usb_audio_capture import USBAudioCapture, CaptureConfig, SampleFormat
+            from .usb_audio import detect_usb_audio_device
+        except ImportError:
+            raise ImportError(
+                "USB audio requires pyalsaaudio. "
+                "Install with: uv pip install -e \".[usb]\""
+            )
+
+        self.format = format
+        self.logger = logging.getLogger(__name__)
+
+        # Auto-detect device if not specified
+        if device is None:
+            self.logger.info("Auto-detecting USB audio device...")
+            device = detect_usb_audio_device()
+            if device is None:
+                raise RuntimeError(
+                    "No USB audio device found. "
+                    "Ensure USB interface is connected and recognized by ALSA. "
+                    "Troubleshoot with: arecord -l"
+                )
+            self.logger.info(f"Auto-detected: {device}")
+
+        # Validate format compatibility
+        if format.bits_per_sample != 16:
+            self.logger.warning(
+                f"UCA202/UCA222 only supports 16-bit audio. "
+                f"Requested {format.bits_per_sample}-bit will use 16-bit."
+            )
+
+        # Create capture configuration optimized for UCA202/UCA222
+        config = CaptureConfig(
+            device=device,
+            sample_rate=format.sample_rate,
+            channels=format.channels,
+            sample_format=SampleFormat.S16_LE,  # UCA202 native format
+            period_size=1024,  # ~21ms latency (appropriate for vinyl)
+            periods=3          # USB audio recommended buffer
+        )
+
+        # Initialize capture
+        self.logger.info(f"Opening USB audio device: {device}")
+        self.capture = USBAudioCapture(config)
+
+        if not self.capture.open():
+            raise RuntimeError(
+                f"Failed to open USB audio device: {device}\n"
+                f"Possible causes:\n"
+                f"  - Device in use by another application\n"
+                f"  - Insufficient permissions (run: sudo usermod -a -G audio $USER)\n"
+                f"  - ALSA configuration issue"
+            )
+
+        # Start capture stream generator
+        self._stream = self.capture.capture_stream()
+
+        self.logger.info(
+            f"USB audio source ready: {device} "
+            f"({format.sample_rate}Hz, {format.channels}ch, {format.bits_per_sample}-bit)"
         )
 
     def read_chunk(self, num_frames: int) -> Optional[bytes]:
-        """Not implemented."""
-        raise NotImplementedError("USB audio not available")
+        """
+        Read audio chunk from USB interface.
+
+        Args:
+            num_frames: Number of frames requested (actual size may vary
+                       based on ALSA period size)
+
+        Returns:
+            PCM audio data (bytes) or None if stream ended or error occurred
+        """
+        if self._stream is None:
+            return None
+
+        try:
+            # Pull next chunk from capture stream
+            return next(self._stream)
+        except StopIteration:
+            self.logger.info("USB capture stream ended")
+            return None
+        except Exception as e:
+            self.logger.error(f"USB audio capture error: {e}")
+            return None
 
     def close(self):
-        """Close USB source."""
-        pass
+        """Close USB audio capture and release ALSA resources."""
+        if hasattr(self, '_stream') and self._stream:
+            try:
+                self.capture.stop()
+                self.logger.info("Stopped USB capture stream")
+            except Exception as e:
+                self.logger.warning(f"Error stopping capture: {e}")
+            finally:
+                self._stream = None
+
+        if hasattr(self, 'capture') and self.capture:
+            try:
+                self.capture.close()
+                self.logger.info("USB audio source closed")
+            except Exception as e:
+                self.logger.warning(f"Error closing capture: {e}")

@@ -20,8 +20,8 @@ from pathlib import Path
 from typing import Optional
 
 # Local imports
-from .audio_source import AudioFormat, SyntheticAudioSource, FileAudioSource
-from .streaming_wav import WAVStreamingServer, generate_wav_header
+from turntabler.audio_source import AudioFormat, SyntheticAudioSource, FileAudioSource, USBAudioSource
+from turntabler.streaming_wav import WAVStreamingServer, generate_wav_header
 
 # SoCo import
 try:
@@ -113,12 +113,13 @@ class StreamingTest:
 
         return ip
 
-    def setup_audio_source(self, source_type: str = "synthetic") -> bool:
+    def setup_audio_source(self, source_type: str = "synthetic", device: Optional[str] = None) -> bool:
         """
         Setup audio source.
 
         Args:
-            source_type: 'synthetic' or 'file:<path>'
+            source_type: 'synthetic', 'file:<path>', or 'usb'
+            device: ALSA device for USB source (optional, auto-detects if None)
 
         Returns:
             True if successful
@@ -143,6 +144,20 @@ class StreamingTest:
             logger.info(f"Creating file audio source: {file_path}")
             self.audio_source = FileAudioSource(file_path, audio_format)
             return True
+
+        elif source_type == "usb":
+            logger.info("Creating USB audio source")
+            try:
+                self.audio_source = USBAudioSource(audio_format, device=device)
+                logger.info("✅ USB audio source initialized")
+                return True
+            except ImportError as e:
+                logger.error(f"USB audio not available: {e}")
+                logger.error("Install with: uv pip install -e \".[usb]\"")
+                return False
+            except RuntimeError as e:
+                logger.error(f"Failed to initialize USB audio: {e}")
+                return False
 
         else:
             logger.error(f"Unknown audio source type: {source_type}")
@@ -367,12 +382,13 @@ class StreamingTest:
         finally:
             self.stop_requested = True
 
-    def run_test(self, audio_source: str = "synthetic") -> bool:
+    def run_test(self, audio_source: str = "synthetic", device: Optional[str] = None) -> bool:
         """
         Run complete streaming test.
 
         Args:
-            audio_source: Audio source type ('synthetic' or 'file:<path>')
+            audio_source: Audio source type ('synthetic', 'file:<path>', or 'usb')
+            device: ALSA device for USB source (optional, auto-detects if None)
 
         Returns:
             True if test passed
@@ -382,7 +398,7 @@ class StreamingTest:
         logger.info("=" * 60)
 
         # Setup
-        if not self.setup_audio_source(audio_source):
+        if not self.setup_audio_source(audio_source, device=device):
             return False
 
         if not self.setup_streaming_server():
@@ -463,7 +479,13 @@ def main():
         "--source",
         type=str,
         default="synthetic",
-        help="Audio source: 'synthetic' or 'file:<path>' (default: synthetic)"
+        help="Audio source: 'synthetic', 'file:<path>', or 'usb' (default: synthetic)"
+    )
+    parser.add_argument(
+        "--device",
+        type=str,
+        default=None,
+        help="ALSA device for USB source (e.g., hw:CARD=CODEC,DEV=0). Auto-detects if not specified."
     )
     parser.add_argument(
         "--port",
@@ -482,7 +504,7 @@ def main():
         port=args.port
     )
 
-    success = test.run_test(audio_source=args.source)
+    success = test.run_test(audio_source=args.source, device=args.device)
     sys.exit(0 if success else 1)
 
 
