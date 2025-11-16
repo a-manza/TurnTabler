@@ -344,6 +344,7 @@ class TurnTablerStreamer:
         # Create FastAPI app
         app = self.server.app
 
+        # TODO: this is disgusting...
         # Run with uvicorn in background
         import uvicorn
 
