@@ -39,11 +39,17 @@ class StreamingDiagnostics:
     read_latencies: list[float] = field(default_factory=list)
     yield_latencies: list[float] = field(default_factory=list)
     thread_overheads: list[float] = field(default_factory=list)
+    inter_yield_gaps: list[float] = field(default_factory=list)
+
+    # Buffer occupancy tracking
+    buffer_occupancies: list[int] = field(default_factory=list)
 
     # Anomaly tracking
     small_chunk_times: list[float] = field(default_factory=list)
     slow_read_times: list[float] = field(default_factory=list)
     slow_yield_times: list[float] = field(default_factory=list)
+    large_gap_times: list[float] = field(default_factory=list)
+    buffer_underrun_times: list[float] = field(default_factory=list)
 
     # Counters
     total_bytes: int = 0
@@ -57,11 +63,14 @@ class StreamingDiagnostics:
     slow_read_threshold_ms: float = 51.0  # Expected: 42.7ms
     slow_yield_threshold_ms: float = 51.0
     small_chunk_threshold: int = 4096
+    large_gap_threshold_ms: float = 51.0  # Expected: 42.7ms
+    buffer_underrun_threshold: int = 2  # Minimum safe buffer depth
 
     # Timing
     start_time: float = 0.0
     last_summary_time: float = 0.0
     last_chunk_time: float = 0.0
+    last_yield_time: float = 0.0
 
     def start(self):
         """Start diagnostics timing."""
@@ -109,13 +118,40 @@ class StreamingDiagnostics:
         if not self.enabled:
             return
 
+        now = time.time()
+        elapsed = now - self.start_time
+
         self.yield_latencies.append(yield_latency_ms)
         if thread_overhead_ms > 0:
             self.thread_overheads.append(thread_overhead_ms)
 
         if yield_latency_ms > self.slow_yield_threshold_ms:
-            elapsed = time.time() - self.start_time
             self.slow_yield_times.append(elapsed)
+
+        # Track inter-yield gap (time between successive yields)
+        if self.last_yield_time > 0:
+            gap_ms = (now - self.last_yield_time) * 1000
+            self.inter_yield_gaps.append(gap_ms)
+            if gap_ms > self.large_gap_threshold_ms:
+                self.large_gap_times.append(elapsed)
+
+        self.last_yield_time = now
+
+    def record_buffer_occupancy(self, occupancy: int):
+        """
+        Record current buffer depth.
+
+        Args:
+            occupancy: Number of chunks currently in buffer
+        """
+        if not self.enabled:
+            return
+
+        self.buffer_occupancies.append(occupancy)
+
+        if occupancy < self.buffer_underrun_threshold:
+            elapsed = time.time() - self.start_time
+            self.buffer_underrun_times.append(elapsed)
 
     def record_overrun(self):
         """Record an ALSA buffer overrun."""
@@ -158,7 +194,13 @@ class StreamingDiagnostics:
         recent_slow_yield = sum(
             1 for t in self.slow_yield_times if t > (elapsed - interval)
         )
-        total_anomalies = recent_small + recent_slow_read + recent_slow_yield
+        recent_large_gap = sum(
+            1 for t in self.large_gap_times if t > (elapsed - interval)
+        )
+        recent_underrun = sum(
+            1 for t in self.buffer_underrun_times if t > (elapsed - interval)
+        )
+        total_anomalies = recent_small + recent_slow_read + recent_slow_yield + recent_large_gap + recent_underrun
 
         # Chunk size stats
         chunk_min = min(self.chunk_sizes) if self.chunk_sizes else 0
@@ -192,6 +234,10 @@ class StreamingDiagnostics:
                 details.append(f"{recent_slow_read} slow reads")
             if recent_slow_yield > 0:
                 details.append(f"{recent_slow_yield} slow yields")
+            if recent_large_gap > 0:
+                details.append(f"{recent_large_gap} large gaps")
+            if recent_underrun > 0:
+                details.append(f"{recent_underrun} buffer underruns")
             lines.append(f"Issues: {', '.join(details)}")
 
         return "\n".join(lines)
@@ -290,6 +336,22 @@ class StreamingDiagnostics:
                     f"{thread_stats['p95']:6.2f}  {thread_stats['p99']:6.2f}  {thread_stats['max']:6.2f}"
                 )
 
+            if self.inter_yield_gaps:
+                gap_stats = self._get_stats(self.inter_yield_gaps)
+                lines.append(
+                    f"  gap    {gap_stats['min']:6.2f}  {gap_stats['p50']:6.2f}  "
+                    f"{gap_stats['p95']:6.2f}  {gap_stats['p99']:6.2f}  {gap_stats['max']:6.2f}"
+                )
+
+            lines.append("")
+
+        # Buffer occupancy statistics
+        if self.buffer_occupancies:
+            buf_min = min(self.buffer_occupancies)
+            buf_avg = statistics.mean(self.buffer_occupancies)
+            buf_max = max(self.buffer_occupancies)
+            lines.append("Buffer Occupancy:")
+            lines.append(f"  min={buf_min} avg={buf_avg:.1f} max={buf_max}")
             lines.append("")
 
         # Anomalies
@@ -304,6 +366,12 @@ class StreamingDiagnostics:
         lines.append(
             f"  Slow yields (>{self.slow_yield_threshold_ms}ms): {len(self.slow_yield_times)}"
         )
+        lines.append(
+            f"  Large gaps (>{self.large_gap_threshold_ms}ms): {len(self.large_gap_times)}"
+        )
+        lines.append(
+            f"  Buffer underruns (<{self.buffer_underrun_threshold}): {len(self.buffer_underrun_times)}"
+        )
 
         # Show first few anomaly timestamps
         if self.small_chunk_times:
@@ -314,6 +382,24 @@ class StreamingDiagnostics:
                 else ""
             )
             lines.append(f"    Small chunk times: {', '.join(times)}{suffix}")
+
+        if self.large_gap_times:
+            times = [f"{t:.1f}s" for t in self.large_gap_times[:5]]
+            suffix = (
+                f" (+{len(self.large_gap_times) - 5} more)"
+                if len(self.large_gap_times) > 5
+                else ""
+            )
+            lines.append(f"    Large gap times: {', '.join(times)}{suffix}")
+
+        if self.buffer_underrun_times:
+            times = [f"{t:.1f}s" for t in self.buffer_underrun_times[:5]]
+            suffix = (
+                f" (+{len(self.buffer_underrun_times) - 5} more)"
+                if len(self.buffer_underrun_times) > 5
+                else ""
+            )
+            lines.append(f"    Buffer underrun times: {', '.join(times)}{suffix}")
 
         lines.append("")
 
@@ -366,6 +452,20 @@ class StreamingDiagnostics:
         if self.overruns > 0:
             recs.append(f"{self.overruns} ALSA overruns - capture buffer overflow")
             recs.append("Consider: Increase periods (ring buffer depth)")
+
+        # Check for large inter-yield gaps
+        if len(self.large_gap_times) > 0:
+            gap_pct = len(self.large_gap_times) / len(self.inter_yield_gaps) * 100 if self.inter_yield_gaps else 0
+            if gap_pct > 1:
+                recs.append(f"{gap_pct:.1f}% large gaps - network or event loop delays")
+                recs.append("Consider: Increase buffer depth to absorb jitter")
+            else:
+                recs.append(f"{len(self.large_gap_times)} large gaps detected - minor timing jitter")
+
+        # Check for buffer underruns
+        if len(self.buffer_underrun_times) > 0:
+            recs.append(f"{len(self.buffer_underrun_times)} buffer underruns - producer too slow")
+            recs.append("Consider: Increase buffer size or reduce consumer rate")
 
         # Check throughput
         if self.total_bytes > 0 and self.start_time > 0:

@@ -468,12 +468,26 @@ class TurnTablerStreamer:
                 errors=["HTTP server failed to start"],
             )
 
+        # Start producer and pre-fill buffer BEFORE telling Sonos to play
+        # This ensures Sonos has immediate data when it connects
+        if not self.server.start_producer():
+            logger.error("Failed to start audio producer")
+            return StreamingStats(
+                duration_seconds=0,
+                final_state="PRODUCER_FAILED",
+                errors=["Audio producer failed to start"],
+            )
+
+        if not self.server.prefill_buffer(timeout=5.0):
+            logger.warning("Buffer pre-fill timeout - continuing anyway")
+            errors.append("Buffer pre-fill timeout")
+
         # Now setup Sonos (after server is ready)
         if not self.setup_sonos():
             logger.warning("Sonos setup failed - continuing with server only")
             errors.append("Sonos setup failed")
 
-        # Now tell Sonos to start streaming (server is already running)
+        # Now tell Sonos to start streaming (server is already running, buffer is full)
         if not self.start_streaming():
             logger.warning("Sonos streaming failed - continuing with server")
             errors.append("Sonos streaming failed")
@@ -506,6 +520,10 @@ class TurnTablerStreamer:
             except Exception as e:
                 logger.warning(f"Error stopping Sonos: {e}")
                 errors.append(f"Stop failed: {e}")
+
+        # Stop producer thread
+        if self.server:
+            self.server.stop_producer()
 
         if self.audio_source:
             self.audio_source.close()
