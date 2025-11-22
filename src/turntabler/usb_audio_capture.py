@@ -241,7 +241,7 @@ class USBAudioCapture:
         try:
             self.pcm = alsaaudio.PCM(
                 type=alsaaudio.PCM_CAPTURE,
-                mode=alsaaudio.PCM_NONBLOCK,
+                mode=alsaaudio.PCM_NORMAL,
                 rate=self.config.sample_rate,
                 channels=self.config.channels,
                 format=self.config.sample_format.value,
@@ -350,11 +350,6 @@ class USBAudioCapture:
                             logger.error(f"Callback error: {e}")
 
                     yield data
-
-                elif length == 0:
-                    # No data available yet (non-blocking mode)
-                    # Sleep briefly to prevent busy-wait CPU spinning
-                    time.sleep(0.001)  # 1ms
 
                 elif length == -alsaaudio.EPIPE:
                     # Buffer overrun - we're not reading fast enough

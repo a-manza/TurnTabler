@@ -52,8 +52,10 @@ class StreamingDiagnostics:
 
     # Configuration (set during init)
     expected_chunk_size: int = 8192  # Expected bytes per chunk
-    slow_read_threshold_ms: float = 10.0
-    slow_yield_threshold_ms: float = 10.0
+    # Blocking mode takes ~42.7ms per period (2048 frames @ 48kHz)
+    # Set thresholds with 20% margin to avoid false positives
+    slow_read_threshold_ms: float = 51.0  # Expected: 42.7ms
+    slow_yield_threshold_ms: float = 51.0
     small_chunk_threshold: int = 4096
 
     # Timing

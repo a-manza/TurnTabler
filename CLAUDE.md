@@ -190,16 +190,17 @@ class WAVFormat:  # Same as AudioFormat!
 | Single orchestrator | DRY principle, test prod code | 2025-11-16 |
 | `force_radio=False` | Prevents ICY metadata corruption | 2025-11-14 |
 | Behringer UCA222 | $30-40, 16-bit/48kHz, proven ALSA | 2025-11-14 |
+| `PCM_NORMAL` blocking | Guarantees full periods, simpler than buffering | 2025-11-22 |
 
 ### Recent Changes (2025-11-22)
+- **Blocking mode:** Switched to `PCM_NORMAL` for guaranteed full-period reads (fixes skipping)
 - **Diagnostics system:** New `diagnostics.py` module with comprehensive metrics
 - **CLI flags:** Added `--debug` and `--debug-interval` for performance analysis
 - **Device detection:** Preferred device patterns (CODEC, UCA) for Behringer auto-selection
-- **Buffer tuning:** Increased ALSA buffers (period_size=2048, periods=4)
+- **Buffer tuning:** ALSA buffers (period_size=2048, periods=4)
 - **Imports cleanup:** All imports at top level, no conditional/TYPE_CHECKING patterns
 - **Async fix:** `streaming_wav.py` uses `asyncio.to_thread()` for non-blocking I/O
 - **DRY:** Consolidated `WAVFormat` and `AudioFormat` into single class
-- **Dead code removed:** Unused functions, unreachable ImportError handlers
 
 ### Previous Changes (2025-11-16)
 - **Created:** `cli.py` (395 lines, Typer interface) + `streaming.py` (512 lines, orchestrator)
