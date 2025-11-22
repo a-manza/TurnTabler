@@ -59,12 +59,12 @@ class StreamingDiagnostics:
     # Configuration (set during init)
     expected_chunk_size: int = 8192  # Expected bytes per chunk
     # Blocking mode takes ~42.7ms per period (2048 frames @ 48kHz)
-    # Set thresholds with 20% margin to avoid false positives
-    slow_read_threshold_ms: float = 51.0  # Expected: 42.7ms
-    slow_yield_threshold_ms: float = 51.0
+    # Set thresholds with margin to avoid false positives
+    slow_read_threshold_ms: float = 51.0  # Expected: 42.7ms, 20% margin
+    slow_yield_threshold_ms: float = 100.0  # Higher tolerance for WiFi jitter
     small_chunk_threshold: int = 4096
-    large_gap_threshold_ms: float = 51.0  # Expected: 42.7ms
-    buffer_underrun_threshold: int = 2  # Minimum safe buffer depth
+    large_gap_threshold_ms: float = 100.0  # Higher tolerance for WiFi jitter
+    buffer_underrun_threshold: int = 1  # Flag when buffer empty (occupancy < 1)
 
     # Timing
     start_time: float = 0.0
@@ -197,9 +197,16 @@ class StreamingDiagnostics:
         recent_large_gap = sum(
             1 for t in self.large_gap_times if t > (elapsed - interval)
         )
-        recent_underrun = sum(
-            1 for t in self.buffer_underrun_times if t > (elapsed - interval)
-        )
+
+        # Only count buffer underruns as anomalies if yields are also slow
+        # (otherwise it's just normal synchronized producer/consumer operation)
+        slow_yield_pct = len(self.slow_yield_times) / len(self.yield_latencies) * 100 if self.yield_latencies else 0
+        recent_underrun = 0
+        if slow_yield_pct > 5:
+            recent_underrun = sum(
+                1 for t in self.buffer_underrun_times if t > (elapsed - interval)
+            )
+
         total_anomalies = recent_small + recent_slow_read + recent_slow_yield + recent_large_gap + recent_underrun
 
         # Chunk size stats
@@ -462,10 +469,16 @@ class StreamingDiagnostics:
             else:
                 recs.append(f"{len(self.large_gap_times)} large gaps detected - minor timing jitter")
 
-        # Check for buffer underruns
-        if len(self.buffer_underrun_times) > 0:
-            recs.append(f"{len(self.buffer_underrun_times)} buffer underruns - producer too slow")
-            recs.append("Consider: Increase buffer size or reduce consumer rate")
+        # Check for buffer underruns - only problematic if yields are also slow
+        if len(self.buffer_underrun_times) > 0 and self.yield_latencies:
+            # Calculate what % of yields were slow
+            slow_yield_pct = len(self.slow_yield_times) / len(self.yield_latencies) * 100
+
+            if slow_yield_pct > 5:
+                # Real problem: buffer empty AND consumer waiting
+                recs.append(f"{len(self.buffer_underrun_times)} buffer underruns with {slow_yield_pct:.1f}% slow yields")
+                recs.append("Consider: Increase buffer size or check audio source")
+            # Otherwise: buffer empty but yields fast = normal synchronized operation
 
         # Check throughput
         if self.total_bytes > 0 and self.start_time > 0:
