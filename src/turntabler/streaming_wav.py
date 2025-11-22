@@ -149,17 +149,12 @@ class WAVStreamingServer:
 
         while not self._stop_producer.is_set():
             # Read chunk from audio source
-            read_start = time.time()
+            # Note: read diagnostics are recorded by the audio source (usb_audio_capture)
             chunk = self.audio_source.read_chunk(8192)
-            read_latency_ms = (time.time() - read_start) * 1000
 
             if chunk is None:
                 logger.info("Audio source exhausted in producer")
                 break
-
-            # Record read diagnostics
-            if self.diagnostics:
-                self.diagnostics.record_chunk_read(len(chunk), read_latency_ms)
 
             # Add to buffer
             with self._buffer_lock:
@@ -301,7 +296,7 @@ class WAVStreamingServer:
             Audio chunk bytes, or None if producer stopped and buffer empty
         """
         # Wait for data with timeout to allow checking producer status
-        max_wait = 0.1  # 100ms timeout per iteration
+        max_wait = 0.01  # 10ms timeout per iteration
         waited = 0.0
         max_total_wait = 2.0  # Give up after 2 seconds
 
