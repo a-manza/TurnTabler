@@ -10,12 +10,14 @@ Supports both file-based streaming (POC) and real-time USB audio capture.
 import asyncio
 import logging
 import struct
+import time
 from typing import Any, AsyncGenerator, Optional
 
 from fastapi import FastAPI, Request
 from fastapi.responses import StreamingResponse
 
 from turntabler.audio_source import AudioFormat
+from turntabler.diagnostics import StreamingDiagnostics
 
 logger = logging.getLogger(__name__)
 
@@ -71,6 +73,7 @@ class WAVStreamingServer:
         audio_source: Any,
         wav_format: Optional[AudioFormat] = None,
         stream_name: str = "TurnTabler",
+        diagnostics: Optional[StreamingDiagnostics] = None,
     ):
         """
         Initialize WAV streaming server.
@@ -79,10 +82,12 @@ class WAVStreamingServer:
             audio_source: Audio source (file or USB)
             wav_format: WAV format specification
             stream_name: Display name for stream
+            diagnostics: Optional diagnostics collector for performance metrics
         """
         self.audio_source = audio_source
         self.wav_format = wav_format or AudioFormat()
         self.stream_name = stream_name
+        self.diagnostics = diagnostics
 
         self.app = FastAPI(title="TurnTabler WAV Streaming Server")
         self._setup_routes()
@@ -152,13 +157,21 @@ class WAVStreamingServer:
         try:
             while True:
                 # Read audio chunk from source (in thread to avoid blocking event loop)
+                yield_start = time.time()
+                thread_start = time.time()
                 chunk = await asyncio.to_thread(self.audio_source.read_chunk, 4096)
+                thread_overhead_ms = (time.time() - thread_start) * 1000
 
                 if chunk is None:
                     logger.info("Audio source exhausted")
                     break
 
                 yield chunk
+                yield_latency_ms = (time.time() - yield_start) * 1000
+
+                # Record diagnostics
+                if self.diagnostics:
+                    self.diagnostics.record_yield(yield_latency_ms, thread_overhead_ms)
 
                 chunk_count += 1
                 total_bytes += len(chunk)

@@ -37,6 +37,8 @@ from typing import Callable, Generator, Optional
 
 import alsaaudio
 
+from turntabler.diagnostics import StreamingDiagnostics
+
 logger = logging.getLogger(__name__)
 
 
@@ -200,14 +202,20 @@ class USBAudioCapture:
         ...         capture.close()
     """
 
-    def __init__(self, config: CaptureConfig):
+    def __init__(
+        self,
+        config: CaptureConfig,
+        diagnostics: Optional[StreamingDiagnostics] = None,
+    ):
         """
         Initialize USB audio capture.
 
         Args:
             config: CaptureConfig object with capture parameters
+            diagnostics: Optional diagnostics collector for performance metrics
         """
         self.config = config
+        self.diagnostics = diagnostics
         self.pcm: Optional[alsaaudio.PCM] = None
         self.is_capturing = False
         self._frames_captured = 0
@@ -321,12 +329,18 @@ class USBAudioCapture:
                     logger.info(f"Reached duration limit: {duration_seconds}s")
                     break
 
-                # Read audio data
+                # Read audio data with timing
+                read_start = time.time()
                 length, data = self.pcm.read()
+                read_latency_ms = (time.time() - read_start) * 1000
 
                 if length > 0:
                     # Successfully read data
                     self._frames_captured += length
+
+                    # Record diagnostics
+                    if self.diagnostics:
+                        self.diagnostics.record_chunk_read(len(data), read_latency_ms)
 
                     # Call callback if provided
                     if callback:
@@ -345,6 +359,8 @@ class USBAudioCapture:
                 elif length == -alsaaudio.EPIPE:
                     # Buffer overrun - we're not reading fast enough
                     self._overruns += 1
+                    if self.diagnostics:
+                        self.diagnostics.record_overrun()
                     logger.warning(
                         f"Buffer overrun detected (EPIPE) - overrun #{self._overruns}. "
                         f"Consider increasing period_size or periods."

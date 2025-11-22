@@ -14,8 +14,10 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Optional
 
+from turntabler.diagnostics import StreamingDiagnostics
 from turntabler.usb_audio import detect_usb_audio_device
-from turntabler.usb_audio_capture import CaptureConfig, SampleFormat, USBAudioCapture
+from turntabler.usb_audio_capture import (CaptureConfig, SampleFormat,
+                                          USBAudioCapture)
 
 
 @dataclass
@@ -206,7 +208,12 @@ class USBAudioSource(AudioSource):
     interfaces like the Behringer UCA202/UCA222.
     """
 
-    def __init__(self, format: AudioFormat, device: Optional[str] = None):
+    def __init__(
+        self,
+        format: AudioFormat,
+        device: Optional[str] = None,
+        diagnostics: Optional[StreamingDiagnostics] = None,
+    ):
         """
         Initialize USB audio source.
 
@@ -214,6 +221,7 @@ class USBAudioSource(AudioSource):
             format: Audio format specification (48kHz, 2ch, 16-bit recommended)
             device: ALSA device name (e.g., 'hw:CARD=CODEC,DEV=0').
                    If None, auto-detects first USB audio device.
+            diagnostics: Optional diagnostics collector for performance metrics
 
         Raises:
             RuntimeError: If no USB audio device found or failed to open
@@ -226,6 +234,7 @@ class USBAudioSource(AudioSource):
             source = USBAudioSource(AudioFormat(), device='hw:CARD=CODEC,DEV=0')
         """
         self.format = format
+        self.diagnostics = diagnostics
         self.logger = logging.getLogger(__name__)
 
         # Auto-detect device if not specified
@@ -260,7 +269,7 @@ class USBAudioSource(AudioSource):
 
         # Initialize capture
         self.logger.info(f"Opening USB audio device: {device}")
-        self.capture = USBAudioCapture(config)
+        self.capture = USBAudioCapture(config, diagnostics=self.diagnostics)
 
         if not self.capture.open():
             raise RuntimeError(

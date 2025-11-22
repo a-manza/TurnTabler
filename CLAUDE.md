@@ -72,7 +72,7 @@ Sonos Speaker (Native Protocol)
 Lossless Playback (48kHz/16-bit PCM)
 ```
 
-### Core Modules (6 files)
+### Core Modules (7 files)
 
 | File | Purpose |
 |------|---------|
@@ -82,6 +82,7 @@ Lossless Playback (48kHz/16-bit PCM)
 | `audio_source.py` | Audio abstractions (Synthetic/File/USB) |
 | `usb_audio.py` | USB device detection & enumeration |
 | `usb_audio_capture.py` | ALSA capture wrapper (pyalsaaudio) |
+| `diagnostics.py` | Streaming performance metrics & analysis |
 
 ---
 
@@ -114,6 +115,8 @@ uvx ruff check          # Linting check
 turntabler stream                          # Stream from USB to auto-discovered Sonos
 turntabler stream --synthetic              # Test with synthetic audio
 turntabler stream --sonos-ip 192.168.1.x   # Specify Sonos speaker
+turntabler stream --debug                  # Enable streaming diagnostics
+turntabler stream --debug --debug-interval 30  # Diagnostics every 30s
 turntabler list                            # List USB audio devices
 ```
 
@@ -121,6 +124,7 @@ turntabler list                            # List USB audio devices
 
 **1. Import Standards**
 - **All imports at module top level** - no inline/conditional imports
+- **No TYPE_CHECKING imports** - if you need a type, import it directly
 - Dependencies are required (installed via package), so no try/except ImportError handlers
 - Dead code paths that can never execute must be removed
 
@@ -128,11 +132,15 @@ turntabler list                            # List USB audio devices
 # ✅ CORRECT - imports at top level
 import uvicorn
 from soco import SoCo, discover
-from turntabler.usb_audio import detect_usb_audio_device
+from turntabler.diagnostics import StreamingDiagnostics
 
 # ❌ WRONG - inline import
 def start_server():
     import uvicorn  # NO!
+
+# ❌ WRONG - TYPE_CHECKING conditional import
+if TYPE_CHECKING:
+    from turntabler.diagnostics import StreamingDiagnostics  # NEVER!
 
 # ❌ WRONG - dead error handler
 try:
@@ -184,11 +192,14 @@ class WAVFormat:  # Same as AudioFormat!
 | Behringer UCA222 | $30-40, 16-bit/48kHz, proven ALSA | 2025-11-14 |
 
 ### Recent Changes (2025-11-22)
-- **Imports cleanup:** All imports moved to top level, removed conditional/inline imports
-- **Async fix:** `streaming_wav.py` now uses `asyncio.to_thread()` for non-blocking I/O
+- **Diagnostics system:** New `diagnostics.py` module with comprehensive metrics
+- **CLI flags:** Added `--debug` and `--debug-interval` for performance analysis
+- **Device detection:** Preferred device patterns (CODEC, UCA) for Behringer auto-selection
+- **Buffer tuning:** Increased ALSA buffers (period_size=2048, periods=4)
+- **Imports cleanup:** All imports at top level, no conditional/TYPE_CHECKING patterns
+- **Async fix:** `streaming_wav.py` uses `asyncio.to_thread()` for non-blocking I/O
 - **DRY:** Consolidated `WAVFormat` and `AudioFormat` into single class
 - **Dead code removed:** Unused functions, unreachable ImportError handlers
-- **Bug fix:** `cli.py` was calling non-existent method on `USBAudioDeviceManager`
 
 ### Previous Changes (2025-11-16)
 - **Created:** `cli.py` (395 lines, Typer interface) + `streaming.py` (512 lines, orchestrator)
@@ -228,6 +239,13 @@ Entry point (`turntabler` command):
 - `test_quick()` - 30s validation
 - `test_full()` - Extended test
 - `list_devices()` - USB enumeration
+
+### diagnostics.py - StreamingDiagnostics
+Performance metrics and analysis:
+- Chunk size distribution and anomaly detection
+- Latency tracking (read, yield, thread overhead)
+- Periodic summaries and final report
+- Tuning recommendations
 
 ---
 

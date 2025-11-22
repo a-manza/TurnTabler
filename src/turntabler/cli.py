@@ -81,6 +81,14 @@ def stream(
     quiet: Annotated[
         bool, typer.Option("--quiet", "-q", help="Minimal output")
     ] = False,
+    # Diagnostics
+    debug: Annotated[
+        bool, typer.Option("--debug", help="Enable streaming diagnostics")
+    ] = False,
+    debug_interval: Annotated[
+        int,
+        typer.Option("--debug-interval", help="Seconds between diagnostic summaries"),
+    ] = 60,
 ):
     """
     Stream audio to Sonos speakers.
@@ -168,6 +176,8 @@ def stream(
             host=host,
             port=port,
             stream_name=stream_name,
+            debug=debug,
+            debug_interval=debug_interval,
         )
 
         stats = streamer.run(audio_source=source_type, device=device)

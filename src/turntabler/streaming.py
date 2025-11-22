@@ -22,12 +22,9 @@ from typing import Optional
 import uvicorn
 from soco import SoCo, discover
 
-from turntabler.audio_source import (
-    AudioFormat,
-    FileAudioSource,
-    SyntheticAudioSource,
-    USBAudioSource,
-)
+from turntabler.audio_source import (AudioFormat, FileAudioSource,
+                                     SyntheticAudioSource, USBAudioSource)
+from turntabler.diagnostics import StreamingDiagnostics
 from turntabler.streaming_wav import WAVStreamingServer
 
 logger = logging.getLogger(__name__)
@@ -65,6 +62,8 @@ class TurnTablerStreamer:
         host: str = "0.0.0.0",
         port: int = 5901,
         stream_name: str = "TurnTabler",
+        debug: bool = False,
+        debug_interval: int = 60,
     ):
         """
         Initialize streamer.
@@ -76,6 +75,8 @@ class TurnTablerStreamer:
             host: HTTP server bind address
             port: HTTP server bind port
             stream_name: Display name for stream (shown in Sonos app)
+            debug: Enable diagnostics collection
+            debug_interval: Seconds between diagnostic summaries
         """
         self.sonos_ip = sonos_ip
         self.audio_frequency = audio_frequency
@@ -83,12 +84,15 @@ class TurnTablerStreamer:
         self.host = host
         self.port = port
         self.stream_name = stream_name
+        self.debug = debug
+        self.debug_interval = debug_interval
 
         self.sonos = None
         self.server = None
         self.audio_source = None
         self.start_time = None
         self.stop_requested = False
+        self.diagnostics = None
 
     def discover_sonos(self) -> Optional[SoCo]:
         """Discover Sonos speaker on network."""
@@ -167,7 +171,9 @@ class TurnTablerStreamer:
         elif source_type == "usb":
             logger.info("Creating USB audio source")
             try:
-                self.audio_source = USBAudioSource(audio_format, device=device)
+                self.audio_source = USBAudioSource(
+                    audio_format, device=device, diagnostics=self.diagnostics
+                )
                 logger.info("USB audio source initialized")
                 return True
             except RuntimeError as e:
@@ -190,6 +196,7 @@ class TurnTablerStreamer:
                 audio_source=self.audio_source,
                 wav_format=audio_format,
                 stream_name=self.stream_name,
+                diagnostics=self.diagnostics,
             )
             logger.info("WAV streaming server initialized")
             return True
@@ -396,6 +403,10 @@ class TurnTablerStreamer:
                             except Exception as e:
                                 logger.warning(f"  Error checking Sonos: {e}")
 
+                # Print diagnostics summary if enabled
+                if self.diagnostics and self.diagnostics.should_print_summary():
+                    logger.info(self.diagnostics.periodic_summary())
+
                 time.sleep(1)
 
         except KeyboardInterrupt:
@@ -419,6 +430,15 @@ class TurnTablerStreamer:
         logger.info("=" * 60)
         logger.info("TurnTabler Streaming")
         logger.info("=" * 60)
+
+        # Initialize diagnostics if debug enabled
+        if self.debug:
+            self.diagnostics = StreamingDiagnostics(
+                enabled=True,
+                summary_interval=self.debug_interval,
+            )
+            self.diagnostics.start()
+            logger.info(f"Diagnostics enabled (interval: {self.debug_interval}s)")
 
         errors = []
         final_state = "UNKNOWN"
@@ -495,6 +515,10 @@ class TurnTablerStreamer:
         logger.info("=" * 60)
         logger.info(f"Streaming complete: {int(elapsed)} seconds")
         logger.info("=" * 60)
+
+        # Print diagnostics report if enabled
+        if self.diagnostics:
+            logger.info(self.diagnostics.final_report())
 
         return StreamingStats(
             duration_seconds=elapsed, final_state=final_state, errors=errors
