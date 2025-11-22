@@ -19,17 +19,16 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
-# Local imports
-from turntabler.audio_source import (AudioFormat, FileAudioSource,
-                                     SyntheticAudioSource, USBAudioSource)
-from turntabler.streaming_wav import WAVStreamingServer
+import uvicorn
+from soco import SoCo, discover
 
-# SoCo import
-try:
-    from soco import SoCo, discover
-except ImportError:
-    SoCo = None
-    discover = None
+from turntabler.audio_source import (
+    AudioFormat,
+    FileAudioSource,
+    SyntheticAudioSource,
+    USBAudioSource,
+)
+from turntabler.streaming_wav import WAVStreamingServer
 
 logger = logging.getLogger(__name__)
 
@@ -169,12 +168,8 @@ class TurnTablerStreamer:
             logger.info("Creating USB audio source")
             try:
                 self.audio_source = USBAudioSource(audio_format, device=device)
-                logger.info("✅ USB audio source initialized")
+                logger.info("USB audio source initialized")
                 return True
-            except ImportError as e:
-                logger.error(f"USB audio not available: {e}")
-                logger.error('Install with: uv pip install -e ".[usb]"')
-                return False
             except RuntimeError as e:
                 logger.error(f"Failed to initialize USB audio: {e}")
                 return False
@@ -303,8 +298,6 @@ class TurnTablerStreamer:
         Returns:
             True if server is ready, False if timeout
         """
-        import socket
-
         start = time.time()
         local_ip = self.get_local_ip()
         server_addr = (local_ip, self.port)
@@ -343,10 +336,6 @@ class TurnTablerStreamer:
 
         # Create FastAPI app
         app = self.server.app
-
-        # TODO: this is disgusting...
-        # Run with uvicorn in background
-        import uvicorn
 
         config = uvicorn.Config(app, host=self.host, port=self.port, log_level="info")
         server = uvicorn.Server(config)

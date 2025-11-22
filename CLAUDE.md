@@ -117,6 +117,59 @@ turntabler stream --sonos-ip 192.168.1.x   # Specify Sonos speaker
 turntabler list                            # List USB audio devices
 ```
 
+### Code Quality Standards ⚠️ CRITICAL
+
+**1. Import Standards**
+- **All imports at module top level** - no inline/conditional imports
+- Dependencies are required (installed via package), so no try/except ImportError handlers
+- Dead code paths that can never execute must be removed
+
+```python
+# ✅ CORRECT - imports at top level
+import uvicorn
+from soco import SoCo, discover
+from turntabler.usb_audio import detect_usb_audio_device
+
+# ❌ WRONG - inline import
+def start_server():
+    import uvicorn  # NO!
+
+# ❌ WRONG - dead error handler
+try:
+    from .usb_audio import detect_usb_audio_device
+except ImportError:
+    raise ImportError("Install with...")  # Can never happen!
+```
+
+**2. Async Patterns**
+- **Never block event loop** - wrap synchronous I/O in `asyncio.to_thread()`
+
+```python
+# ✅ CORRECT - non-blocking
+chunk = await asyncio.to_thread(audio_source.read_chunk, 4096)
+
+# ❌ WRONG - blocks event loop
+chunk = audio_source.read_chunk(4096)  # In async context!
+```
+
+**3. DRY Principle**
+- **No duplicate classes** - single source of truth
+- Import shared types rather than redefining
+
+```python
+# ✅ CORRECT - import from canonical location
+from turntabler.audio_source import AudioFormat
+
+# ❌ WRONG - duplicate definition
+@dataclass
+class WAVFormat:  # Same as AudioFormat!
+    sample_rate: int = 48000
+```
+
+**4. USB as Default Use Case**
+- USB streaming is the primary production use case
+- All USB dependencies (pyalsaaudio, soco, etc.) are **required**, not optional
+
 ---
 
 ## Key Technical Decisions
@@ -130,7 +183,14 @@ turntabler list                            # List USB audio devices
 | `force_radio=False` | Prevents ICY metadata corruption | 2025-11-14 |
 | Behringer UCA222 | $30-40, 16-bit/48kHz, proven ALSA | 2025-11-14 |
 
-### Recent Changes (2025-11-16)
+### Recent Changes (2025-11-22)
+- **Imports cleanup:** All imports moved to top level, removed conditional/inline imports
+- **Async fix:** `streaming_wav.py` now uses `asyncio.to_thread()` for non-blocking I/O
+- **DRY:** Consolidated `WAVFormat` and `AudioFormat` into single class
+- **Dead code removed:** Unused functions, unreachable ImportError handlers
+- **Bug fix:** `cli.py` was calling non-existent method on `USBAudioDeviceManager`
+
+### Previous Changes (2025-11-16)
 - **Created:** `cli.py` (395 lines, Typer interface) + `streaming.py` (512 lines, orchestrator)
 - **Deleted:** `sonos_control.py` (obsolete, integrated into streaming.py)
 - **Simplified:** `streaming_wav.py` (removed ~140 lines duplicate code)

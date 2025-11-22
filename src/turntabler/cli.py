@@ -12,7 +12,7 @@ import typer
 from typing_extensions import Annotated
 
 from turntabler.streaming import TurnTablerStreamer
-from turntabler.usb_audio import USBAudioDeviceManager
+from turntabler.usb_audio import USBAudioDeviceManager, detect_usb_audio_device
 
 # Create Typer app
 app = typer.Typer(
@@ -134,8 +134,7 @@ def stream(
         # If no device specified, check if USB device exists
         if not device:
             try:
-                manager = USBAudioDeviceManager()
-                detected = manager.detect_usb_audio_device()
+                detected = detect_usb_audio_device()
                 if not detected:
                     typer.secho(
                         "⚠️  Warning: No USB audio device detected",

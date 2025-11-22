@@ -7,11 +7,15 @@ Defines the interface and implementations for audio sources:
 - USB-based (for production with turntable)
 """
 
+import logging
 import math
 import struct
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Optional
+
+from turntabler.usb_audio import detect_usb_audio_device
+from turntabler.usb_audio_capture import CaptureConfig, SampleFormat, USBAudioCapture
 
 
 @dataclass
@@ -200,8 +204,6 @@ class USBAudioSource(AudioSource):
 
     Production implementation for real-time audio capture from USB audio
     interfaces like the Behringer UCA202/UCA222.
-
-    Requires: pyalsaaudio (install with: uv pip install -e ".[usb]")
     """
 
     def __init__(self, format: AudioFormat, device: Optional[str] = None):
@@ -214,7 +216,6 @@ class USBAudioSource(AudioSource):
                    If None, auto-detects first USB audio device.
 
         Raises:
-            ImportError: If pyalsaaudio not installed
             RuntimeError: If no USB audio device found or failed to open
 
         Example:
@@ -224,19 +225,6 @@ class USBAudioSource(AudioSource):
             # Specify device manually
             source = USBAudioSource(AudioFormat(), device='hw:CARD=CODEC,DEV=0')
         """
-        import logging
-
-        # Check pyalsaaudio availability
-        try:
-            from .usb_audio import detect_usb_audio_device
-            from .usb_audio_capture import (CaptureConfig, SampleFormat,
-                                            USBAudioCapture)
-        except ImportError:
-            raise ImportError(
-                "USB audio requires pyalsaaudio. "
-                'Install with: uv pip install -e ".[usb]"'
-            )
-
         self.format = format
         self.logger = logging.getLogger(__name__)
 

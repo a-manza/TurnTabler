@@ -10,40 +10,17 @@ Supports both file-based streaming (POC) and real-time USB audio capture.
 import asyncio
 import logging
 import struct
-from dataclasses import dataclass
 from typing import Any, AsyncGenerator, Optional
 
 from fastapi import FastAPI, Request
 from fastapi.responses import StreamingResponse
 
+from turntabler.audio_source import AudioFormat
+
 logger = logging.getLogger(__name__)
 
 
-@dataclass
-class WAVFormat:
-    """WAV audio format specification."""
-
-    sample_rate: int = 48000
-    channels: int = 2
-    bits_per_sample: int = 16
-
-    @property
-    def byte_rate(self) -> int:
-        """Bytes per second."""
-        return self.sample_rate * self.channels * self.bits_per_sample // 8
-
-    @property
-    def block_align(self) -> int:
-        """Bytes per sample frame."""
-        return self.channels * self.bits_per_sample // 8
-
-    @property
-    def bandwidth_mbps(self) -> float:
-        """Network bandwidth in Mbps."""
-        return (self.byte_rate * 8) / 1_000_000
-
-
-def generate_wav_header(wav_format: WAVFormat, infinite: bool = True) -> bytes:
+def generate_wav_header(wav_format: AudioFormat, infinite: bool = True) -> bytes:
     """
     Generate WAV file header.
 
@@ -92,7 +69,7 @@ class WAVStreamingServer:
     def __init__(
         self,
         audio_source: Any,
-        wav_format: Optional[WAVFormat] = None,
+        wav_format: Optional[AudioFormat] = None,
         stream_name: str = "TurnTabler",
     ):
         """
@@ -104,7 +81,7 @@ class WAVStreamingServer:
             stream_name: Display name for stream
         """
         self.audio_source = audio_source
-        self.wav_format = wav_format or WAVFormat()
+        self.wav_format = wav_format or AudioFormat()
         self.stream_name = stream_name
 
         self.app = FastAPI(title="TurnTabler WAV Streaming Server")
@@ -174,8 +151,8 @@ class WAVStreamingServer:
 
         try:
             while True:
-                # Read audio chunk from source
-                chunk = self.audio_source.read_chunk(4096)
+                # Read audio chunk from source (in thread to avoid blocking event loop)
+                chunk = await asyncio.to_thread(self.audio_source.read_chunk, 4096)
 
                 if chunk is None:
                     logger.info("Audio source exhausted")
@@ -195,9 +172,6 @@ class WAVStreamingServer:
                         f"({mb_sent:.1f}MB, {seconds:.1f}s)"
                     )
 
-                # Small async yield to prevent blocking
-                await asyncio.sleep(0)
-
         except Exception as e:
             logger.error(f"Stream error: {e}")
             raise
@@ -206,51 +180,3 @@ class WAVStreamingServer:
             logger.info(
                 f"Stream ended: {chunk_count} chunks, {total_bytes / 1_000_000:.1f}MB"
             )
-
-
-def create_app(
-    audio_source: Any,
-    wav_format: Optional[WAVFormat] = None,
-    stream_name: str = "TurnTabler",
-) -> FastAPI:
-    """
-    Create FastAPI application for WAV streaming.
-
-    Args:
-        audio_source: Audio source (file or USB)
-        wav_format: WAV format specification
-        stream_name: Display name for stream
-
-    Returns:
-        Configured FastAPI app
-    """
-    server = WAVStreamingServer(audio_source, wav_format, stream_name)
-    return server.app
-
-
-# Convenience function for CLI
-def run_server(
-    audio_source: Any,
-    host: str = "0.0.0.0",
-    port: int = 5901,
-    wav_format: Optional[WAVFormat] = None,
-    stream_name: str = "TurnTabler",
-):
-    """
-    Run WAV streaming server.
-
-    Args:
-        audio_source: Audio source (file or USB)
-        host: Bind address
-        port: Bind port
-        wav_format: WAV format specification
-        stream_name: Display name for stream
-    """
-    import uvicorn
-
-    app = create_app(audio_source, wav_format, stream_name)
-
-    logger.info(f"Starting server on {host}:{port}")
-    logger.info(f"Stream URL: http://{host}:{port}/stream.wav")
-
-    uvicorn.run(app, host=host, port=port, log_level="info")
