@@ -59,6 +59,9 @@ class USBAudioDeviceManager:
     USB audio interfaces.
     """
 
+    # Preferred device patterns (checked first, in order)
+    PREFERRED_DEVICE_PATTERNS = ["CODEC", "UCA"]
+
     # Patterns for internal sound cards to filter out
     INTERNAL_CARD_PATTERNS = ["PCH", "Intel", "Analog", "Built-in", "HDA"]
 
@@ -156,6 +159,14 @@ class USBAudioDeviceManager:
             ...     print(f"Found: {device.device_name}")
         """
         devices = USBAudioDeviceManager.list_capture_devices()
+
+        # If no explicit pattern, check for preferred devices first
+        if not pattern:
+            for pref_pattern in USBAudioDeviceManager.PREFERRED_DEVICE_PATTERNS:
+                for dev in devices:
+                    if pref_pattern.lower() in dev.card_name.lower():
+                        logger.info(f"Found preferred device: {dev}")
+                        return dev
 
         # Filter out internal sound cards
         usb_devices = [

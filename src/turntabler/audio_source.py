@@ -248,13 +248,14 @@ class USBAudioSource(AudioSource):
             )
 
         # Create capture configuration optimized for UCA202/UCA222
+        # Larger buffers trade latency for stability (vinyl doesn't need low latency)
         config = CaptureConfig(
             device=device,
             sample_rate=format.sample_rate,
             channels=format.channels,
             sample_format=SampleFormat.S16_LE,  # UCA202 native format
-            period_size=1024,  # ~21ms latency (appropriate for vinyl)
-            periods=3,  # USB audio recommended buffer
+            period_size=2048,  # ~42ms per period
+            periods=4,  # Total buffer: ~170ms
         )
 
         # Initialize capture
