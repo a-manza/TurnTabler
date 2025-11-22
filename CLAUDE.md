@@ -191,8 +191,13 @@ class WAVFormat:  # Same as AudioFormat!
 | `force_radio=False` | Prevents ICY metadata corruption | 2025-11-14 |
 | Behringer UCA222 | $30-40, 16-bit/48kHz, proven ALSA | 2025-11-14 |
 | `PCM_NORMAL` blocking | Guarantees full periods, simpler than buffering | 2025-11-22 |
+| Producer-consumer buffer | Absorbs WiFi jitter, immediate data for Sonos | 2025-11-22 |
 
 ### Recent Changes (2025-11-22)
+- **Producer-consumer buffer:** Jitter buffer (~500ms) decouples ALSA capture from HTTP delivery
+- **Pre-fill buffer:** Buffer fills before `play_uri()` so Sonos has immediate data
+- **Enhanced diagnostics:** Inter-yield gap tracking, buffer occupancy stats
+- **Tuned thresholds:** WiFi jitter tolerance (100ms for yields/gaps vs 51ms for reads)
 - **Blocking mode:** Switched to `PCM_NORMAL` for guaranteed full-period reads (fixes skipping)
 - **Diagnostics system:** New `diagnostics.py` module with comprehensive metrics
 - **CLI flags:** Added `--debug` and `--debug-interval` for performance analysis
@@ -227,6 +232,8 @@ FastAPI HTTP server for WAV streaming:
 - Infinite WAV header (0xFFFFFFFF)
 - Chunked transfer encoding
 - `/stream.wav` endpoint for Sonos
+- Producer-consumer buffer (~500ms jitter absorption)
+- `start_producer()`, `prefill_buffer()`, `stop_producer()`
 
 ### audio_source.py - Audio Abstractions
 - `AudioSource` - ABC interface
@@ -244,7 +251,8 @@ Entry point (`turntabler` command):
 ### diagnostics.py - StreamingDiagnostics
 Performance metrics and analysis:
 - Chunk size distribution and anomaly detection
-- Latency tracking (read, yield, thread overhead)
+- Latency tracking (read, yield, inter-yield gaps)
+- Buffer occupancy monitoring
 - Periodic summaries and final report
 - Tuning recommendations
 

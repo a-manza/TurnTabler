@@ -93,16 +93,21 @@ def run(self, audio_source, device):
     # Step 3: Start server in background thread
     self.start_http_server_background()
 
-    # Step 4: Connect to Sonos
+    # Step 4: Start producer and pre-fill buffer
+    self.server.start_producer()
+    self.server.prefill_buffer()  # ~500ms buffer ready
+
+    # Step 5: Connect to Sonos
     self.setup_sonos()
 
-    # Step 5: Tell Sonos to play our stream
+    # Step 6: Tell Sonos to play our stream (buffer is full)
     self.start_streaming()
 
-    # Step 6: Monitor until stopped
+    # Step 7: Monitor until stopped
     self.monitor_streaming()
 
-    # Step 7: Cleanup
+    # Step 8: Cleanup
+    self.server.stop_producer()
     self.audio_source.close()
     self.sonos.stop()
 ```
@@ -198,37 +203,47 @@ def capture_stream(self):
 ```python
 # streaming_wav.py: WAVStreamingServer
 
-def __init__(self, audio_source, wav_format, stream_name):
+def __init__(self, audio_source, wav_format, stream_name, buffer_size=12):
     self.audio_source = audio_source
     self.wav_format = wav_format
+    self.buffer_size = buffer_size
+
+    # Producer-consumer buffer for jitter absorption
+    self._buffer = deque(maxlen=buffer_size * 2)
+    self._buffer_lock = threading.Lock()
+    self._stop_producer = threading.Event()
 
     # Create FastAPI app with routes
     self.app = FastAPI()
     self._setup_routes()
 
-def _setup_routes(self):
-    @self.app.get("/stream.wav")
-    async def stream_wav(request):
-        return StreamingResponse(
-            self._generate_stream(),
-            media_type="audio/wav",
-        )
+def start_producer(self):
+    # Start thread that reads from ALSA into buffer
+    self._producer_thread = threading.Thread(
+        target=self._producer_loop, daemon=True
+    )
+    self._producer_thread.start()
+
+def _producer_loop(self):
+    while not self._stop_producer.is_set():
+        chunk = self.audio_source.read_chunk(8192)
+        with self._buffer_lock:
+            self._buffer.append(chunk)
+
+def prefill_buffer(self, timeout=5.0):
+    # Wait for buffer to fill before Sonos connects
+    # Ensures immediate data availability
 
 async def _generate_stream(self):
     # 1. Send WAV header first
     header = generate_wav_header(self.wav_format, infinite=True)
     yield header
 
-    # 2. Continuously stream PCM data
+    # 2. Stream from buffer (not directly from audio source)
     while True:
-        # Non-blocking read from audio source
-        chunk = await asyncio.to_thread(
-            self.audio_source.read_chunk, 4096
-        )
-
+        chunk = await asyncio.to_thread(self._get_from_buffer)
         if chunk is None:
             break
-
         yield chunk
 ```
 
@@ -313,10 +328,15 @@ def start_streaming(self):
 ┌─────────────────┐
 │ USBAudioSource  │  read_chunk() → next(generator)
 └────────┬────────┘
-         │ bytes
+         │ bytes (producer thread)
          ▼
 ┌─────────────────┐
-│WAVStreamingServer│  _generate_stream() → yields chunks
+│  Jitter Buffer  │  deque with ~12 chunks (~500ms)
+└────────┬────────┘
+         │ bytes (consumer thread)
+         ▼
+┌─────────────────┐
+│WAVStreamingServer│  _generate_stream() → yields from buffer
 └────────┬────────┘
          │ async generator
          ▼
@@ -332,9 +352,10 @@ def start_streaming(self):
 
 | Component | Size | Notes |
 |-----------|------|-------|
-| ALSA period | 1024 frames | 4096 bytes (2ch × 2bytes × 1024) |
-| read_chunk() | 4096 bytes | Passed to generator |
-| HTTP chunk | 4096 bytes | Same as read |
+| ALSA period | 2048 frames | 8192 bytes (2ch × 2bytes × 2048) |
+| read_chunk() | 8192 bytes | One period per read |
+| Jitter buffer | ~12 chunks | ~500ms absorption |
+| HTTP chunk | 8192 bytes | Same as read |
 | WAV header | 44 bytes | Sent once at start |
 
 ---
@@ -394,26 +415,39 @@ def start_streaming(self):
 │    ├── setup_audio_source()              │
 │    ├── setup_streaming_server()          │
 │    ├── start_http_server_background() ───┼──┐
-│    ├── setup_sonos()                     │  │
-│    ├── start_streaming()                 │  │
-│    └── monitor_streaming() [blocks]      │  │
-│                                          │  │
-└──────────────────────────────────────────┘  │
-                                              │
-┌──────────────────────────────────────────┐  │
-│         Uvicorn Thread (daemon)          │◀─┘
+│    ├── start_producer() ─────────────────┼──┼──┐
+│    ├── prefill_buffer()                  │  │  │
+│    ├── setup_sonos()                     │  │  │
+│    ├── start_streaming()                 │  │  │
+│    └── monitor_streaming() [blocks]      │  │  │
+│                                          │  │  │
+└──────────────────────────────────────────┘  │  │
+                                              │  │
+┌──────────────────────────────────────────┐  │  │
+│         Uvicorn Thread (daemon)          │◀─┘  │
+│                                          │     │
+│  FastAPI app serves /stream.wav          │     │
+│    │                                     │     │
+│    └── _generate_stream()                │     │
+│          └── _get_from_buffer()          │     │
+│                (consumes from buffer)    │     │
+│                                          │     │
+└──────────────────────────────────────────┘     │
+                                                 │
+┌──────────────────────────────────────────┐     │
+│       Producer Thread (daemon)           │◀────┘
 │                                          │
-│  FastAPI app serves /stream.wav          │
+│  _producer_loop()                        │
 │    │                                     │
-│    └── _generate_stream()                │
-│          └── audio_source.read_chunk()   │
-│                (via asyncio.to_thread)   │
+│    └── audio_source.read_chunk()         │
+│          └── fills jitter buffer         │
 │                                          │
 └──────────────────────────────────────────┘
 ```
 
 **Notes:**
 - Main thread handles orchestration and waits for Ctrl+C
-- Uvicorn thread handles HTTP requests
-- `asyncio.to_thread()` prevents blocking the event loop during audio reads
-- Daemon thread dies automatically when main exits
+- Uvicorn thread handles HTTP requests and consumes from buffer
+- Producer thread reads from ALSA and fills the jitter buffer
+- Buffer decouples ALSA timing from HTTP delivery (absorbs WiFi jitter)
+- Daemon threads die automatically when main exits

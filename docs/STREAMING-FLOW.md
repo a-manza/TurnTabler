@@ -83,7 +83,7 @@ config = CaptureConfig(
 
 ## Stage 3: HTTP WAV Streaming
 
-**Components:** AudioSource → WAVStreamingServer → Sonos HTTP Client
+**Components:** AudioSource → Jitter Buffer → WAVStreamingServer → Sonos HTTP Client
 
 ### WAV Header (Infinite Stream)
 
@@ -143,6 +143,30 @@ icy-name: TurnTabler
 ```
 
 **Key insight:** No `Content-Length` header + chunked encoding = infinite stream.
+
+### Jitter Buffer
+
+To absorb WiFi latency variations and ensure smooth playback, TurnTabler uses a producer-consumer buffer:
+
+```
+┌──────────────┐     ┌──────────────┐     ┌──────────────┐
+│   Producer   │     │   Buffer     │     │   Consumer   │
+│   Thread     │────▶│  (deque)     │────▶│   (HTTP)     │
+└──────────────┘     └──────────────┘     └──────────────┘
+   ALSA read           ~12 chunks           yields to
+   every 42.7ms        ~500ms depth         Sonos client
+```
+
+**Why this matters:**
+1. **Pre-fill before play** - Buffer fills (~500ms) before telling Sonos to connect
+2. **Immediate data** - Sonos gets audio instantly when it sends GET request
+3. **Jitter absorption** - WiFi latency spikes (50-100ms) don't cause skips
+4. **Decoupled timing** - ALSA timing variations don't affect HTTP delivery
+
+**Configuration:**
+```python
+buffer_size = 12  # chunks (~500ms at 42.7ms per chunk)
+```
 
 ---
 
@@ -215,16 +239,17 @@ This matches Sonos's maximum supported quality - your vinyl plays back exactly a
 
 ```
 Turntable → USB Interface:     ~0ms (analog)
-USB → ALSA Buffer:             ~21ms (period_size/sample_rate)
+USB → ALSA Buffer:             ~42.7ms (period_size/sample_rate)
 ALSA → Python:                 ~1ms (read call)
-Python → HTTP Chunk:           ~0ms (memory copy)
-Network → Sonos:               ~1-5ms (LAN)
+Python → Jitter Buffer:        ~500ms (pre-fill before play)
+Buffer → HTTP Chunk:           ~0ms (memory copy)
+Network → Sonos:               ~1-50ms (WiFi with jitter)
 Sonos Buffer → Playback:       ~2-3 seconds (Sonos internal)
                                ─────────────
-Total perceived latency:       ~2-3 seconds
+Total perceived latency:       ~3 seconds
 ```
 
-The 2-3 second delay is Sonos's internal buffering - unavoidable but consistent. Once playing, audio is continuous with no dropouts.
+The 2-3 second delay is Sonos's internal buffering - unavoidable but consistent. The jitter buffer adds ~500ms but eliminates audio skips caused by WiFi latency variations. Once playing, audio is continuous with no dropouts.
 
 ---
 
@@ -245,6 +270,12 @@ streaming.py: TurnTablerStreamer.run()
     │
     ├── start_http_server_background()
     │       └── uvicorn.Server.run() [thread]
+    │
+    ├── start_producer()
+    │       └── _producer_loop() [thread] → fills buffer
+    │
+    ├── prefill_buffer()
+    │       └── waits for ~500ms of audio in buffer
     │
     ├── setup_sonos()
     │       └── soco.SoCo() → group.coordinator
